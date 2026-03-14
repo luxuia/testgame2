@@ -22,6 +22,8 @@
 
 		Tags
 		{
+			"RenderPipeline" = "UniversalPipeline"
+			"UniversalMaterialType" = "Lit"
 			"RenderType" = "TransparentCutout"
 			"Queue" = "AlphaTest"
 			"IgnoreProjector" = "True"
@@ -30,6 +32,7 @@
 
         Pass
         {
+			Tags { "LightMode" = "UniversalForward" }
 
 			LOD 300
 			Cull Back

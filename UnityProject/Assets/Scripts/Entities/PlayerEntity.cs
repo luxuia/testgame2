@@ -1,4 +1,4 @@
-using Minecraft.Configurations;
+﻿using Minecraft.Configurations;
 using Minecraft.PlayerControls;
 using System;
 using UnityEngine;
@@ -8,11 +8,9 @@ using UnityEngine.InputSystem;
 namespace Minecraft.Entities
 {
     [DisallowMultipleComponent]
-        [RequireComponent(typeof(BlockInteraction))]
-        [RequireComponent(typeof(FluidInteractor))]
-        [RequireComponent(typeof(Minecraft.BuildMode.BuildModeController))]
-        [RequireComponent(typeof(Minecraft.PlayerControls.BuildModeInput))]
-        public class PlayerEntity : Entity
+    [RequireComponent(typeof(BlockInteraction))]
+    [RequireComponent(typeof(FluidInteractor))]
+    public class PlayerEntity : Entity
     {
         // ...fields of entity class
 
@@ -100,12 +98,6 @@ namespace Minecraft.Entities
             BlockInteraction interaction = GetComponent<BlockInteraction>();
             interaction.Initialize(m_Camera, this);
             interaction.enabled = true;
-
-            var buildModeController = GetComponent<Minecraft.BuildMode.BuildModeController>();
-            if (buildModeController == null) buildModeController = gameObject.AddComponent<Minecraft.BuildMode.BuildModeController>();
-            var buildModeInput = GetComponent<Minecraft.PlayerControls.BuildModeInput>();
-            if (buildModeInput == null) buildModeInput = gameObject.AddComponent<Minecraft.PlayerControls.BuildModeInput>();
-            buildModeInput.Initialize(m_Camera, World);
         }
 
         private void SwitchJumpMode(InputAction.CallbackContext context)

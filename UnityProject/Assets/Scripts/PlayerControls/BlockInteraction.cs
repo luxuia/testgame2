@@ -71,12 +71,6 @@ namespace Minecraft.PlayerControls
                 return;
             }
 
-            var buildModeController = GetComponent<Minecraft.BuildMode.BuildModeController>();
-            if (buildModeController != null && buildModeController.BuildModeActive)
-            {
-                return;
-            }
-
             Ray ray = GetRay();
             IWorld world = m_PlayerEntity.World;
             DigBlock(ray, world);

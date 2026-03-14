@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using Minecraft.Configurations;
-using Minecraft.Entities;
 using UnityEngine;
 using static Minecraft.Rendering.LightingUtility;
 using static Minecraft.WorldConsts;
@@ -137,17 +136,7 @@ namespace Minecraft
         IEnumerator EnablePlayer()
         {
             yield return new WaitForSeconds(5);
-            var playerGO = GameObject.FindGameObjectWithTag("Player");
-            playerGO.GetComponent<PlayerEntity>().enabled = true;
-            SpawnWorker(playerGO.transform.position);
-        }
-
-        private void SpawnWorker(Vector3 nearPosition)
-        {
-            var go = new GameObject("Worker");
-            go.transform.position = nearPosition + new Vector3(2, 0, 2);
-            var worker = go.AddComponent<WorkerEntity>();
-            worker.InitializeEntityIfNot();
+            GameObject.FindGameObjectWithTag("Player").GetComponent<Minecraft.Entities.PlayerEntity>().enabled = true;
         }
 
         public override void LightBlock(int x, int y, int z, ModificationSource source)
