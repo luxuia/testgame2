@@ -1,0 +1,29 @@
+{
+  "name": "com.jasonxudeveloper.jengine.core",
+  "version": "1.1.6",
+  "displayName": "JEngine.Core",
+  "description": "The solution that allows unity games update in runtime.",
+  "license": "MIT",
+  "unity": "2022.3",
+  "documentationUrl": "https://jengine.xgamedev.net/",
+  "changelogUrl": "https://github.com/JasonXuDeveloper/JEngine/blob/master/CHANGE.md",
+  "keywords": [
+    "HotUpdate",
+    "HybridCLR",
+    "HotFix",
+    "Game",
+    "Update",
+    "JEngine",
+    "Framework"
+  ],
+  "author": {
+    "name": "Jason Xu",
+    "email": "jason@xgamedev.com",
+    "url": "https://github.com/JasonXuDeveloper"
+  },
+  "dependencies": {
+    "com.cysharp.unitask": "2.5.10",
+    "com.jasonxudeveloper.nino": "4.0.0-preview.147",
+    "com.tuyoogame.yooasset": "2.3.16"
+  }
+}

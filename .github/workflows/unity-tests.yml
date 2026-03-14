@@ -1,0 +1,176 @@
+name: Unity Tests (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      unity_version:
+        description: 'Unity version to use for testing'
+        required: false
+        type: string
+        default: '2022.3.55f1'
+      test_mode:
+        description: 'Test mode to run (All, EditMode, PlayMode)'
+        required: false
+        type: string
+        default: 'All'
+      project_path:
+        description: 'Path to Unity project directory'
+        required: false
+        type: string
+        default: 'UnityProject'
+    outputs:
+      test_results:
+        description: 'Test results summary'
+        value: ${{ jobs.test.outputs.results }}
+
+# Workflow-level permissions for reusable workflow
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  test:
+    name: Run Unity Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+    outputs:
+      results: ${{ steps.test-summary.outputs.summary }}
+
+    steps:
+      # Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Cache Unity Library folder for faster builds
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: ${{ inputs.project_path }}/Library
+          key: Library-${{ inputs.project_path }}-${{ inputs.unity_version }}-${{ hashFiles(format('{0}/Packages/packages-lock.json', inputs.project_path)) }}
+          restore-keys: |
+            Library-${{ inputs.project_path }}-${{ inputs.unity_version }}-
+            Library-${{ inputs.project_path }}-
+
+      # Run EditMode tests
+      - name: Run EditMode tests
+        if: inputs.test_mode == 'All' || inputs.test_mode == 'EditMode'
+        uses: game-ci/unity-test-runner@v4
+        id: editmode-tests
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          projectPath: ${{ inputs.project_path }}
+          unityVersion: ${{ inputs.unity_version }}
+          testMode: EditMode
+          artifactsPath: artifacts/EditMode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: EditMode Test Results
+          coverageOptions: 'generateAdditionalMetrics;generateHtmlReport;generateBadgeReport;assemblyFilters:+JEngine.*'
+
+      # Run PlayMode tests
+      - name: Run PlayMode tests
+        if: inputs.test_mode == 'All' || inputs.test_mode == 'PlayMode'
+        uses: game-ci/unity-test-runner@v4
+        id: playmode-tests
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        with:
+          projectPath: ${{ inputs.project_path }}
+          unityVersion: ${{ inputs.unity_version }}
+          testMode: PlayMode
+          artifactsPath: artifacts/PlayMode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: PlayMode Test Results
+          coverageOptions: 'generateAdditionalMetrics;generateHtmlReport;generateBadgeReport;assemblyFilters:+JEngine.*'
+
+      # Upload test results as artifacts
+      - name: Upload EditMode test results
+        if: always() && (inputs.test_mode == 'All' || inputs.test_mode == 'EditMode')
+        uses: actions/upload-artifact@v4
+        with:
+          name: EditMode-results-${{ inputs.unity_version }}
+          path: artifacts/EditMode
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload PlayMode test results
+        if: always() && (inputs.test_mode == 'All' || inputs.test_mode == 'PlayMode')
+        uses: actions/upload-artifact@v4
+        with:
+          name: PlayMode-results-${{ inputs.unity_version }}
+          path: artifacts/PlayMode
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Fix coverage file permissions (generated as root by Docker)
+      - name: Fix coverage permissions
+        if: always()
+        run: |
+          if [ -d "${{ steps.editmode-tests.outputs.coveragePath }}" ]; then
+            sudo chown -R $(whoami) "${{ steps.editmode-tests.outputs.coveragePath }}"
+          fi
+          if [ -d "${{ steps.playmode-tests.outputs.coveragePath }}" ]; then
+            sudo chown -R $(whoami) "${{ steps.playmode-tests.outputs.coveragePath }}"
+          fi
+          # List coverage files for debugging
+          echo "Coverage paths:"
+          echo "EditMode: ${{ steps.editmode-tests.outputs.coveragePath }}"
+          echo "PlayMode: ${{ steps.playmode-tests.outputs.coveragePath }}"
+          find . -name "*.xml" -path "*/CodeCoverage/*" 2>/dev/null || echo "No coverage XML files found"
+
+      # Upload coverage results
+      - name: Upload coverage results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Coverage-results-${{ inputs.unity_version }}
+          path: |
+            ${{ steps.editmode-tests.outputs.coveragePath }}
+            ${{ steps.playmode-tests.outputs.coveragePath }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Generate test summary
+      - name: Generate test summary
+        id: test-summary
+        if: always()
+        run: |
+          SUMMARY="## Unity Test Results\n\n"
+
+          if [ "${{ inputs.test_mode }}" == "All" ] || [ "${{ inputs.test_mode }}" == "EditMode" ]; then
+            EDITMODE_RESULT="${{ steps.editmode-tests.outcome }}"
+            if [ "$EDITMODE_RESULT" == "success" ]; then
+              SUMMARY="${SUMMARY}✅ **EditMode**: All tests passed\n"
+            else
+              SUMMARY="${SUMMARY}❌ **EditMode**: Tests failed\n"
+            fi
+          fi
+
+          if [ "${{ inputs.test_mode }}" == "All" ] || [ "${{ inputs.test_mode }}" == "PlayMode" ]; then
+            PLAYMODE_RESULT="${{ steps.playmode-tests.outcome }}"
+            if [ "$PLAYMODE_RESULT" == "success" ]; then
+              SUMMARY="${SUMMARY}✅ **PlayMode**: All tests passed\n"
+            else
+              SUMMARY="${SUMMARY}❌ **PlayMode**: Tests failed\n"
+            fi
+          fi
+
+          SUMMARY="${SUMMARY}\n**Unity Version**: ${{ inputs.unity_version }}\n"
+          SUMMARY="${SUMMARY}**Project Path**: ${{ inputs.project_path }}"
+
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$SUMMARY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # Return Unity license
+      - name: Return Unity license
+        uses: game-ci/unity-return-license@v2
+        if: always()
