@@ -1,2 +1,0 @@
-Drop .anim and .controller files here. (Animation Controller)
-

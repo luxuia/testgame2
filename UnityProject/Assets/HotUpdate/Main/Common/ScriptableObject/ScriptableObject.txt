@@ -1,2 +1,0 @@
-Drop .asset files here. (Scriptable Objects)
-
