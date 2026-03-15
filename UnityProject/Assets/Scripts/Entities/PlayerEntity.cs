@@ -75,7 +75,7 @@ namespace Minecraft.Entities
             m_FlyDownAction = m_InputActions["Player/Fly Down"];
             m_CursorStateAction = m_InputActions["Player/Cursor State"];
 
-            m_Camera = GetComponentInChildren<Camera>();
+            m_Camera = Camera.main;
             m_CameraTransform = m_Camera.GetComponent<Transform>();
             m_FluidInteractor = GetComponent<FluidInteractor>();
 
@@ -153,9 +153,20 @@ namespace Minecraft.Entities
             float speed = GetInput(out Vector2 input);
             m_FluidInteractor.UpdateState(this, m_CameraTransform, out float vMultiplier);
 
+
             // always move along the camera forward as it is the direction that it being aimed at
-            Vector3 velocity = m_Transform.forward * input.y + m_Transform.right * input.x;
+            Vector3 velocity = m_CameraTransform.forward * input.y + m_CameraTransform.right * input.x;
             velocity = speed * vMultiplier * velocity.normalized;
+
+            if (input != Vector2.zero)
+            {
+                Vector3 moveDir = m_CameraTransform.forward * input.y + m_CameraTransform.right * input.x;
+                moveDir.y = 0;
+                if (moveDir.sqrMagnitude > 0.01f)
+                {
+                    m_Transform.rotation = Quaternion.LookRotation(moveDir.normalized);
+                }
+            }
 
             if (UseGravity)
             {
@@ -172,7 +183,7 @@ namespace Minecraft.Entities
                 }
 
                 ProgressStepCycle(input, speed, isGrounded, groundBlock);
-                UpdateCameraPosition(speed, isGrounded);
+                //UpdateCameraPosition(speed, isGrounded);
             }
             else if (m_FlyDown)
             {

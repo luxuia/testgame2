@@ -37,7 +37,7 @@ namespace Minecraft.PlayerControls
         public void LookRotation(Vector2 rotation, float deltaTime)
         {
             rotation *= Sensitivity;
-            m_CharacterRotation *= Quaternion.Euler(0f, rotation.x, 0f);
+            // 仅旋转相机，不旋转角色（角色由移动方向控制）
             m_CameraRotation *= Quaternion.Euler(-rotation.y, 0f, 0f);
 
             if (ClampVerticalRotation)
@@ -47,12 +47,10 @@ namespace Minecraft.PlayerControls
 
             if (EnableSmooth)
             {
-                m_Character.localRotation = Quaternion.Slerp(m_Character.localRotation, m_CharacterRotation, SmoothTime * deltaTime);
                 m_Camera.localRotation = Quaternion.Slerp(m_Camera.localRotation, m_CameraRotation, SmoothTime * deltaTime);
             }
             else
             {
-                m_Character.localRotation = m_CharacterRotation;
                 m_Camera.localRotation = m_CameraRotation;
             }
         }
