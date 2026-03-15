@@ -340,19 +340,23 @@ namespace Minecraft.Pathfinding
 
         private sealed class FlowFieldData
         {
-            public readonly Vector3Int Target;
+            public Vector3Int Target;
             public readonly Dictionary<Vector3Int, float> IntegrationCost;
-            public readonly float BuiltAtTime;
-            public readonly int ExpandedNodes;
-            public readonly int IntegrationNodeCount;
+            public float BuiltAtTime;
+            public int ExpandedNodes;
+            public int IntegrationNodeCount;
 
-            public FlowFieldData(Vector3Int target, Dictionary<Vector3Int, float> integrationCost, float builtAtTime, int expandedNodes)
+            public FlowFieldData(Dictionary<Vector3Int, float> integrationCost)
+            {
+                IntegrationCost = integrationCost;
+            }
+
+            public void Update(Vector3Int target, float builtAtTime, int expandedNodes)
             {
                 Target = target;
-                IntegrationCost = integrationCost;
                 BuiltAtTime = builtAtTime;
                 ExpandedNodes = expandedNodes;
-                IntegrationNodeCount = integrationCost != null ? integrationCost.Count : 0;
+                IntegrationNodeCount = IntegrationCost != null ? IntegrationCost.Count : 0;
             }
         }
 
@@ -361,6 +365,7 @@ namespace Minecraft.Pathfinding
         private static readonly Dictionary<CacheKey, int> s_BuiltFrameByKey = new Dictionary<CacheKey, int>();
         private static readonly HashSet<Vector3Int> s_UniqueTargetsBuffer = new HashSet<Vector3Int>();
         private static readonly Dictionary<CacheKey, float> s_FailedUntilByRequestedTarget = new Dictionary<CacheKey, float>();
+        private static readonly Stack<PriorityQueue<FrontierNode>> s_FrontierPool = new Stack<PriorityQueue<FrontierNode>>(4);
 
         public static List<Vector3Int> FindPath(
             Vector3Int start,
@@ -438,6 +443,25 @@ namespace Minecraft.Pathfinding
             }
         }
 
+        public static bool TryPrepareField(
+            Vector3Int end,
+            IWorld world,
+            int maxNodes,
+            float cacheLifetime,
+            int searchRadius,
+            out Vector3Int preparedTarget)
+        {
+            preparedTarget = end;
+
+            if (!TryGetOrBuildField(end, world, maxNodes, cacheLifetime, searchRadius, out FlowFieldData field, out _))
+            {
+                return false;
+            }
+
+            preparedTarget = field.Target;
+            return true;
+        }
+
         public static bool TryGetNextNode(
             Vector3Int current,
             Vector3Int end,
@@ -450,6 +474,55 @@ namespace Minecraft.Pathfinding
             nextNode = current;
 
             if (!TryGetOrBuildField(end, world, maxNodes, cacheLifetime, searchRadius, out FlowFieldData field, out _))
+            {
+                return false;
+            }
+
+            return TryResolveNextNode(current, field, world, searchRadius, out nextNode);
+        }
+
+        public static bool TryGetNextNodeFromPreparedTarget(
+            Vector3Int current,
+            Vector3Int preparedTarget,
+            IWorld world,
+            int searchRadius,
+            out Vector3Int nextNode)
+        {
+            nextNode = current;
+            if (world == null)
+            {
+                return false;
+            }
+
+            CacheKey key = new CacheKey(RuntimeHelpers.GetHashCode(world), preparedTarget);
+            if (!s_Cache.TryGetValue(key, out FlowFieldData field) || field == null)
+            {
+                return false;
+            }
+
+            return TryResolveNextNode(current, field, world, searchRadius, out nextNode);
+        }
+
+        public static bool HasPreparedField(Vector3Int preparedTarget, IWorld world)
+        {
+            if (world == null)
+            {
+                return false;
+            }
+
+            CacheKey key = new CacheKey(RuntimeHelpers.GetHashCode(world), preparedTarget);
+            return s_Cache.ContainsKey(key);
+        }
+
+        private static bool TryResolveNextNode(
+            Vector3Int current,
+            FlowFieldData field,
+            IWorld world,
+            int searchRadius,
+            out Vector3Int nextNode)
+        {
+            nextNode = current;
+            if (field == null)
             {
                 return false;
             }
@@ -578,7 +651,7 @@ namespace Minecraft.Pathfinding
                 return true;
             }
 
-            field = BuildFlowField(adjustedEnd.Value, world, maxNodes, now);
+            field = BuildFlowField(adjustedEnd.Value, world, maxNodes, now, field);
             if (field == null)
             {
                 s_FailedUntilByRequestedTarget[requestedKey] = now + Mathf.Max(cacheLifetime, 0.1f);
@@ -591,15 +664,30 @@ namespace Minecraft.Pathfinding
             return true;
         }
 
-        private static FlowFieldData BuildFlowField(Vector3Int target, IWorld world, int maxNodes, float now)
+        private static FlowFieldData BuildFlowField(
+            Vector3Int target,
+            IWorld world,
+            int maxNodes,
+            float now,
+            FlowFieldData reuseField)
         {
             if (!AStarPathfinding.IsWalkableNode(target, world))
             {
                 return null;
             }
 
-            var costs = new Dictionary<Vector3Int, float>(Mathf.Max(256, maxNodes));
-            var frontier = new PriorityQueue<FrontierNode>();
+            Dictionary<Vector3Int, float> costs;
+            if (reuseField != null && reuseField.IntegrationCost != null)
+            {
+                costs = reuseField.IntegrationCost;
+                costs.Clear();
+            }
+            else
+            {
+                costs = new Dictionary<Vector3Int, float>(Mathf.Max(256, maxNodes));
+            }
+
+            PriorityQueue<FrontierNode> frontier = AcquireFrontier(Mathf.Max(64, maxNodes / 4));
 
             costs[target] = 0f;
             frontier.Enqueue(new FrontierNode(target, 0f));
@@ -628,7 +716,40 @@ namespace Minecraft.Pathfinding
                 }
             }
 
-            return costs.Count > 0 ? new FlowFieldData(target, costs, now, expanded) : null;
+            ReleaseFrontier(frontier);
+
+            if (costs.Count == 0)
+            {
+                return null;
+            }
+
+            FlowFieldData data = reuseField ?? new FlowFieldData(costs);
+            data.Update(target, now, expanded);
+            return data;
+        }
+
+        private static PriorityQueue<FrontierNode> AcquireFrontier(int capacityHint)
+        {
+            if (s_FrontierPool.Count > 0)
+            {
+                return s_FrontierPool.Pop();
+            }
+
+            return new PriorityQueue<FrontierNode>(Mathf.Max(64, capacityHint));
+        }
+
+        private static void ReleaseFrontier(PriorityQueue<FrontierNode> frontier)
+        {
+            if (frontier == null)
+            {
+                return;
+            }
+
+            frontier.Clear();
+            if (s_FrontierPool.Count < 4)
+            {
+                s_FrontierPool.Push(frontier);
+            }
         }
 
         private static List<Vector3Int> TracePath(Vector3Int start, FlowFieldData field, IWorld world, int searchRadius, int maxPathLength, out int traceSteps)

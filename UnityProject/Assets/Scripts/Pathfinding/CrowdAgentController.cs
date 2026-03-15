@@ -42,6 +42,54 @@ namespace Minecraft.Pathfinding
 
         public void MoveTowardsNode(Vector3Int nextNode, float deltaTime)
         {
+            Vector2 desired = GetDesiredPlanarVelocity(nextNode);
+            MoveWithPlanarVelocity(nextNode, new Vector3(desired.x, 0f, desired.y), deltaTime);
+        }
+
+        public Vector2 GetDesiredPlanarVelocity(Vector3Int nextNode)
+        {
+            Vector3 targetPos = new Vector3(
+                nextNode.x + 0.5f,
+                nextNode.y + PivotHeightFromFeet,
+                nextNode.z + 0.5f);
+
+            Vector3 toTarget = targetPos - transform.position;
+            Vector2 planar = new Vector2(toTarget.x, toTarget.z);
+            float planarDistance = planar.magnitude;
+            if (planarDistance <= NodeReachDistance || planarDistance <= 0.0001f)
+            {
+                return Vector2.zero;
+            }
+
+            return planar / planarDistance * MoveSpeed;
+        }
+
+        public bool IsNearNode(Vector3Int nextNode)
+        {
+            Vector3 targetPos = new Vector3(
+                nextNode.x + 0.5f,
+                nextNode.y + PivotHeightFromFeet,
+                nextNode.z + 0.5f);
+            Vector3 current = transform.position;
+            float dx = targetPos.x - current.x;
+            float dz = targetPos.z - current.z;
+            return (dx * dx + dz * dz) <= NodeReachDistance * NodeReachDistance;
+        }
+
+        public float GetPlanarDistanceToNode(Vector3Int nextNode)
+        {
+            Vector3 targetPos = new Vector3(
+                nextNode.x + 0.5f,
+                nextNode.y + PivotHeightFromFeet,
+                nextNode.z + 0.5f);
+            Vector3 current = transform.position;
+            float dx = targetPos.x - current.x;
+            float dz = targetPos.z - current.z;
+            return Mathf.Sqrt(dx * dx + dz * dz);
+        }
+
+        public void MoveWithPlanarVelocity(Vector3Int nextNode, Vector3 planarVelocity, float deltaTime)
+        {
             Vector3 targetPos = new Vector3(
                 nextNode.x + 0.5f,
                 nextNode.y + PivotHeightFromFeet,
@@ -55,7 +103,7 @@ namespace Minecraft.Pathfinding
 
             if (planarDistance > NodeReachDistance)
             {
-                Vector3 planarMove = planar.normalized * (MoveSpeed * deltaTime);
+                Vector3 planarMove = planarVelocity * deltaTime;
                 if (planarMove.magnitude > planarDistance)
                 {
                     planarMove = planar;
@@ -72,9 +120,11 @@ namespace Minecraft.Pathfinding
             current.y = Mathf.MoveTowards(current.y, targetPos.y, VerticalMoveSpeed * deltaTime);
             transform.position = current;
 
-            if (planar.sqrMagnitude > 0.0001f)
+            Vector3 forward = planarVelocity.sqrMagnitude > 0.0001f ? planarVelocity : planar;
+            forward.y = 0f;
+            if (forward.sqrMagnitude > 0.0001f)
             {
-                Quaternion targetRotation = Quaternion.LookRotation(planar.normalized, Vector3.up);
+                Quaternion targetRotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
                 transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, RotationSpeed * deltaTime);
             }
         }

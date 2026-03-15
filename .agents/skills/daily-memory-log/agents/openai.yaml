@@ -1,0 +1,3 @@
+interface:
+  display_name: "Daily Memory Log"
+  short_description: "Log daily work and follow-up notes to memory.md"

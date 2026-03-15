@@ -3071,18 +3071,49 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   AutoFindAgents: 1
+  IncludeInactiveAgents: 0
+  AutoRefreshInterval: 0.5
+  AgentSearchRoot: {fileID: 0}
   ForceSharedTarget: 1
   Agents: []
   SpawnOnStart: 0
   AgentPrefab: {fileID: 0}
-  SpawnCount: 1
+  SpawnCount: 5
+  SpawnPerFrame: 12
   SpawnRadius: 24
   SpawnSearchRadius: 16
   TargetTransform: {fileID: 2378111722045569734}
   StaticTarget: {x: 0, y: 64, z: 0}
-  FlowFieldMaxNodes: 25000
-  FlowFieldCacheLifetime: 0.25
-  FlowFieldSearchRadius: 12
+  FlowFieldMaxNodes: 250
+  FlowFieldCacheLifetime: 2
+  FlowFieldSearchRadius: 11
+  FlowFieldPrepareInterval: 1.2
+  TickInterval: 0.05
+  RepathMinInterval: 1
+  RepathMaxInterval: 2
+  NoPathfindRadius: 2
+  EnableTargetFormation: 1
+  FormationSpacing: 1.5
+  FormationSearchRadius: 4
+  FormationRebuildInterval: 0.35
+  FormationMaxRings: 24
+  FormationHandoverRadius: 5
+  EnableSharedTargetSmoothing: 1
+  SharedTargetUpdateInterval: 0.2
+  SharedTargetRebuildDistance: 1.5
+  SharedTargetMaxLagDistance: 6
+  LimitMovingSharedTargetNodes: 1
+  MovingSharedTargetMaxNodes: 8000
+  EnableLocalAvoidance: 1
+  AgentRadius: 0.35
+  NeighborDistance: 2
+  AvoidanceTimeHorizon: 0.6
+  AvoidanceStrength: 1.25
+  MaxAvoidanceNeighbors: 8
+  AvoidanceCellSize: 1.5
+  AvoidanceMaxSpeedMultiplier: 1.15
+  UseAdaptiveNodeBudget: 1
+  NodesPerActiveAgent: 600
 --- !u!4 &1978130908
 Transform:
   m_ObjectHideFlags: 0
