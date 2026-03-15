@@ -35,8 +35,9 @@ namespace Minecraft.PlayerControls
         [System.NonSerialized] private Vector3Int m_CurrentDiggingTarget;
 
         public bool IsMoving => m_MovementController != null && m_MovementController.IsMoving;
-        public bool HasTarget => m_TargetSelector != null && m_TargetSelector.SelectedTarget.HasValue;
-        public Vector3Int? TargetPosition => m_TargetSelector?.SelectedTarget;
+        public bool HasTarget => m_TargetSelector != null && m_TargetSelector.SelectedTargetBlock.HasValue;
+        public Vector3Int? TargetPosition => m_TargetSelector?.StandPosition;
+        public Vector3Int? TargetBlock => m_TargetSelector?.SelectedTargetBlock;
         public bool HasDirection => m_MovementController != null && m_MovementController.HasDirection;
         public Vector3 TargetDirection => m_MovementController != null ? m_MovementController.TargetDirection : Vector3.zero;
         public bool HasVerticalMovement => m_MovementController != null && m_MovementController.HasVerticalMovement;
@@ -46,11 +47,6 @@ namespace Minecraft.PlayerControls
             if (m_MovementController != null && m_MovementController.IsMoving)
             {
                 m_MovementController.ClearTarget();
-                
-                if (ShowDebugInfo)
-                {
-                    Debug.Log($"[PlayerController] Pathfinding interrupted by player input");
-                }
             }
         }
 
@@ -75,18 +71,12 @@ namespace Minecraft.PlayerControls
             m_IsAttacking = false;
             m_DiggingDamage = 0;
             m_CurrentDiggingTarget = Vector3Int.down;
-
-            Debug.Log($"[PlayerController] Initialized, TargetSelector: {(m_TargetSelector != null ? "valid" : "null")}, MovementController: {(m_MovementController != null ? "valid" : "null")}");
         }
 
         private void OnTargetSelected(Vector3Int target)
         {
-            m_MovementController.SetTarget(target);
-            
-            if (ShowDebugInfo)
-            {
-                Debug.Log($"[PlayerController] Target selected: {target}, starting pathfinding");
-            }
+            Vector3Int attackBlock = m_TargetSelector.SelectedTargetBlock ?? target;
+            m_MovementController.SetTarget(target, attackBlock);
         }
 
         private void OnTargetCleared()
@@ -96,11 +86,6 @@ namespace Minecraft.PlayerControls
             m_CurrentDiggingTarget = Vector3Int.down;
             ShaderUtility.DigProgress = 0;
             ShaderUtility.TargetedBlockPosition = Vector3.down;
-
-            if (ShowDebugInfo)
-            {
-                Debug.Log($"[PlayerController] Target cleared");
-            }
         }
 
         private void Update()
@@ -115,23 +100,26 @@ namespace Minecraft.PlayerControls
 
         private void UpdateAttack()
         {
-            if (!m_TargetSelector.SelectedTarget.HasValue)
+            if (!m_TargetSelector.SelectedTargetBlock.HasValue)
             {
                 ShaderUtility.DigProgress = 0;
                 ShaderUtility.TargetedBlockPosition = Vector3.down;
                 return;
             }
 
-            Vector3Int targetWalkablePos = m_TargetSelector.SelectedTarget.Value;
-            Vector3Int targetBlockPos = new Vector3Int(targetWalkablePos.x, targetWalkablePos.y - 1, targetWalkablePos.z);
-
+            Vector3Int targetBlockPos = m_TargetSelector.SelectedTargetBlock.Value;
             ShaderUtility.TargetedBlockPosition = targetBlockPos;
 
-            if (m_MovementController.IsInAttackRange(targetWalkablePos))
+            if (m_MovementController.IsInAttackRange(targetBlockPos))
             {
+                if (m_MovementController.IsMoving)
+                {
+                    m_MovementController.StopMovement();
+                }
+
                 if (!m_MovementController.IsMoving)
                 {
-                    if (targetWalkablePos == m_CurrentDiggingTarget)
+                    if (targetBlockPos == m_CurrentDiggingTarget)
                     {
                         m_DiggingDamage += Time.deltaTime * 5;
                         
@@ -142,11 +130,6 @@ namespace Minecraft.PlayerControls
                         {
                             float progress = m_DiggingDamage / block.Hardness;
                             ShaderUtility.DigProgress = (int)(progress * world.RenderingManager.DigProgressTextureCount) - 1;
-                            
-                            if (ShowDebugInfo)
-                            {
-                                Debug.Log($"[PlayerController] Digging block at {targetBlockPos}: {m_DiggingDamage}/{block.Hardness}, progress: {progress * 100}%");
-                            }
 
                             if (m_DiggingDamage >= block.Hardness)
                             {
@@ -156,17 +139,12 @@ namespace Minecraft.PlayerControls
                                 m_TargetSelector.ClearTarget();
                                 m_DiggingDamage = 0;
                                 m_CurrentDiggingTarget = Vector3Int.down;
-
-                                if (ShowDebugInfo)
-                                {
-                                    Debug.Log($"[PlayerController] Destroyed block at {targetBlockPos}");
-                                }
                             }
                         }
                     }
                     else
                     {
-                        m_CurrentDiggingTarget = targetWalkablePos;
+                        m_CurrentDiggingTarget = targetBlockPos;
                         m_DiggingDamage = 0;
                     }
                 }
@@ -189,12 +167,12 @@ namespace Minecraft.PlayerControls
 
         private void OnDrawGizmos()
         {
-            if (!ShowDebugInfo || !m_TargetSelector.SelectedTarget.HasValue)
+            if (!ShowDebugInfo || !m_TargetSelector.SelectedTargetBlock.HasValue)
             {
                 return;
             }
 
-            Vector3Int target = m_TargetSelector.SelectedTarget.Value;
+            Vector3Int target = m_TargetSelector.SelectedTargetBlock.Value;
 
             Gizmos.color = Color.red;
             Gizmos.DrawWireCube(

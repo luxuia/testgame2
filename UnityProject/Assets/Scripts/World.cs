@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Diagnostics;
 using Minecraft.Assets;
@@ -6,6 +6,7 @@ using Minecraft.Audio;
 using Minecraft.Configurations;
 using Minecraft.Entities;
 using Minecraft.Lua;
+using Minecraft.Pathfinding;
 using Minecraft.Rendering;
 using Minecraft.ScriptableWorldGeneration;
 using UnityEngine;
@@ -42,7 +43,7 @@ namespace Minecraft
         [SerializeField] private EntityManager m_EntityManager;
 
         [Header("Others")]
-        [SerializeField] private int m_Seed = 0;
+        [SerializeField] private int m_Seed = 12345;
         [SerializeField] private int m_MaxTickBlockCountPerFrame = 500;
         [SerializeField] private int m_MaxLightBlockCountPerFrame = 500;
 
@@ -299,7 +300,13 @@ namespace Minecraft
                 if (World.ChunkManager.GetChunk(pos, false, out Chunk chunk))
                 {
                     this.AccessorSpaceToAccessorSpacePosition(chunk, ref x, ref y, ref z);
-                    return chunk.SetBlock(x, y, z, value, rotation, source);
+                    bool changed = chunk.SetBlock(x, y, z, value, rotation, source);
+                    if (changed)
+                    {
+                        FlowFieldPathfinding.InvalidateWorld(World);
+                    }
+
+                    return changed;
                 }
 
                 return false;

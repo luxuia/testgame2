@@ -21,9 +21,40 @@ namespace Minecraft.PlayerControls
         [Tooltip("攻击距离")]
         public float AttackDistance = 1.5f;
 
+        [Tooltip("中间路径点到达阈值（越小越不容易切角撞墙）")]
+        public float WaypointThreshold = 0.25f;
+
+        [Tooltip("卡住检测间隔")]
+        public float StuckCheckInterval = 0.35f;
+
+        [Tooltip("卡住检测最小位移")]
+        public float MinProgressDistance = 0.04f;
+
+        [Tooltip("自动重寻路冷却时间")]
+        public float RepathCooldown = 0.8f;
+
+        [Header("Pathfinding Strategy")]
+        [Tooltip("优先使用共享场流（适合多角色同目标，单角色建议关闭）")]
+        public bool PreferFlowField = false;
+
+        [Tooltip("场流节点预算（越大覆盖越广）")]
+        public int FlowFieldMaxNodes = 12000;
+
+        [Tooltip("场流缓存寿命（秒）")]
+        public float FlowFieldCacheLifetime = 0.35f;
+
+        [Tooltip("场流起终点可行走搜索半径")]
+        public int FlowFieldSearchRadius = 12;
+
+        [Tooltip("场流回溯出的路径最大长度")]
+        public int FlowFieldMaxPathLength = 256;
+
         [Header("调试设置")]
         [Tooltip("是否显示路径")]
         public bool ShowPath = true;
+
+        [Tooltip("是否打印每次寻路耗时和节点遍历量")]
+        public bool LogPathfindingStats = true;
 
         [Tooltip("路径颜色")]
         public Color PathColor = Color.cyan;
@@ -35,6 +66,7 @@ namespace Minecraft.PlayerControls
         [System.NonSerialized] private List<Vector3Int> m_CurrentPath;
         [System.NonSerialized] private int m_CurrentPathIndex;
         [System.NonSerialized] private Vector3Int? m_TargetBlock;
+        [System.NonSerialized] private Vector3Int? m_AttackCheckBlock;
         [System.NonSerialized] private bool m_IsMoving;
         [System.NonSerialized] private bool m_HasTarget;
         [System.NonSerialized] private LineRenderer m_PathLineRenderer;
@@ -42,6 +74,9 @@ namespace Minecraft.PlayerControls
         [System.NonSerialized] private Vector3 m_TargetDirection;
         [System.NonSerialized] private bool m_HasDirection;
         [System.NonSerialized] private bool m_HasVerticalMovement;
+        [System.NonSerialized] private Vector3 m_LastStuckCheckPos;
+        [System.NonSerialized] private float m_LastStuckCheckTime;
+        [System.NonSerialized] private float m_LastRepathTime;
 
         public bool IsMoving => m_IsMoving;
         public bool HasTarget => m_HasTarget;
@@ -56,14 +91,17 @@ namespace Minecraft.PlayerControls
             m_CurrentPath = null;
             m_CurrentPathIndex = 0;
             m_TargetBlock = null;
+            m_AttackCheckBlock = null;
             m_IsMoving = false;
             m_HasTarget = false;
             m_HasDirection = false;
             m_TargetDirection = Vector3.zero;
+            m_HasVerticalMovement = false;
+            m_LastStuckCheckPos = transform.position;
+            m_LastStuckCheckTime = Time.time;
+            m_LastRepathTime = -999f;
 
             InitializeDebugVisuals();
-            
-            Debug.Log($"[PathfindingMovement] Initialized, player: {(m_PlayerEntity != null ? "valid" : "null")}");
         }
 
         private void InitializeDebugVisuals()
@@ -109,28 +147,44 @@ namespace Minecraft.PlayerControls
         /// <summary>
         /// 设置目标格子并开始寻路
         /// </summary>
-        public void SetTarget(Vector3Int targetBlock)
+        public void SetTarget(Vector3Int targetBlock, Vector3Int? attackCheckBlock = null)
         {
+            if (m_HasTarget &&
+                m_TargetBlock.HasValue &&
+                m_TargetBlock.Value == targetBlock &&
+                m_CurrentPath != null &&
+                m_CurrentPathIndex < m_CurrentPath.Count)
+            {
+                m_AttackCheckBlock = attackCheckBlock ?? targetBlock;
+                return;
+            }
+
             m_TargetBlock = targetBlock;
+            m_AttackCheckBlock = attackCheckBlock ?? targetBlock;
             m_HasTarget = true;
 
             Vector3Int startPos = GetPlayerGridPosition();
-            m_CurrentPath = AStarPathfinding.FindPath(startPos, targetBlock, m_PlayerEntity.World);
+
+            m_CurrentPath = FindPathUsingConfiguredStrategy(startPos, targetBlock);
 
             if (m_CurrentPath != null && m_CurrentPath.Count > 0)
             {
                 m_CurrentPath = AStarPathfinding.SimplifyPath(m_CurrentPath);
                 m_CurrentPathIndex = 0;
+                if (m_CurrentPath.Count > 1 && m_CurrentPath[0] == startPos)
+                {
+                    // Skip the current cell node to prevent "snap back to cell center" on each click.
+                    m_CurrentPathIndex = 1;
+                }
                 m_IsMoving = true;
+                m_LastStuckCheckPos = m_PlayerEntity.Position;
+                m_LastStuckCheckTime = Time.time;
 
                 UpdatePathVisuals();
                 UpdateTargetMarker();
-
-                Debug.Log($"[PathfindingMovement] Path found with {m_CurrentPath.Count} waypoints");
             }
             else
             {
-                Debug.Log($"[PathfindingMovement] No path found to {targetBlock}");
                 StopMovement();
             }
         }
@@ -145,6 +199,9 @@ namespace Minecraft.PlayerControls
             m_CurrentPathIndex = 0;
             m_HasDirection = false;
             m_TargetDirection = Vector3.zero;
+            m_HasVerticalMovement = false;
+            m_LastStuckCheckPos = transform.position;
+            m_LastStuckCheckTime = Time.time;
 
             if (m_PathLineRenderer != null)
             {
@@ -164,6 +221,7 @@ namespace Minecraft.PlayerControls
         {
             StopMovement();
             m_TargetBlock = null;
+            m_AttackCheckBlock = null;
             m_HasTarget = false;
         }
 
@@ -172,6 +230,7 @@ namespace Minecraft.PlayerControls
             if (!m_IsMoving || m_CurrentPath == null || m_PlayerEntity == null)
             {
                 m_HasDirection = false;
+                m_HasVerticalMovement = false;
                 return;
             }
 
@@ -182,53 +241,51 @@ namespace Minecraft.PlayerControls
             }
 
             Vector3Int targetWaypoint = m_CurrentPath[m_CurrentPathIndex];
-            Vector3 targetPos = new Vector3(targetWaypoint.x + 0.5f, m_PlayerEntity.Position.y, targetWaypoint.z + 0.5f);
+            Vector3 targetPos = new Vector3(targetWaypoint.x + 0.5f, targetWaypoint.y + 0.5f, targetWaypoint.z + 0.5f);
             Vector3 currentPos = m_PlayerEntity.Position;
 
             Vector3 direction = (targetPos - currentPos);
             
             float horizontalDistance = new Vector2(direction.x, direction.z).magnitude;
-            float verticalDistance = direction.y;
+            int currentGridY = GetPlayerWalkableGridY(currentPos);
+            int verticalGridDistance = targetWaypoint.y - currentGridY;
+            bool isLastWaypoint = m_CurrentPathIndex >= m_CurrentPath.Count - 1;
+            float waypointReachThreshold = isLastWaypoint ? ArrivalThreshold : Mathf.Min(ArrivalThreshold, WaypointThreshold);
+            bool reachedWaypoint = horizontalDistance < waypointReachThreshold && verticalGridDistance == 0;
 
-            bool needsJump = verticalDistance > 0.5f && horizontalDistance < 1.5f;
+            bool needsJump = verticalGridDistance > 0 && horizontalDistance < Mathf.Max(ArrivalThreshold + 0.75f, 1.75f);
 
-            if (horizontalDistance < ArrivalThreshold)
+            if (reachedWaypoint)
             {
-                if (verticalDistance > 0.5f && !needsJump)
-                {
-                    m_CurrentPathIndex++;
-                    UpdatePathVisuals();
-                    m_HasDirection = false;
-                    return;
-                }
+                m_CurrentPathIndex++;
+                UpdatePathVisuals();
+                m_HasDirection = false;
+                m_HasVerticalMovement = false;
+                return;
+            }
 
-                if (Mathf.Abs(verticalDistance) < 0.5f || needsJump)
-                {
-                    m_CurrentPathIndex++;
-                    UpdatePathVisuals();
-                    m_HasDirection = false;
-                }
+            TryRecoverFromStuck(currentPos, horizontalDistance, needsJump);
+
+            Vector3 horizontalDir = new Vector3(direction.x, 0, direction.z);
+            if (horizontalDir.sqrMagnitude > 0.0001f)
+            {
+                horizontalDir.Normalize();
             }
             else
             {
-                direction.y = 0;
-                direction.Normalize();
-                m_TargetDirection = direction;
-                m_HasVerticalMovement = needsJump;
-                m_HasDirection = true;
-
-                if (direction.sqrMagnitude > 0.01f)
-                {
-                    transform.rotation = Quaternion.LookRotation(direction);
-                }
-
-                if (true)
-                {
-                    Debug.Log($"[PathfindingMovement] Moving to waypoint {m_CurrentPathIndex}, direction: {direction}, needsJump: {needsJump}");
-                }
+                horizontalDir = transform.forward;
             }
 
-            if (m_TargetBlock.HasValue && IsInAttackRange(m_TargetBlock.Value))
+            m_TargetDirection = horizontalDir;
+            m_HasVerticalMovement = needsJump;
+            m_HasDirection = true;
+
+            if (horizontalDir.sqrMagnitude > 0.01f)
+            {
+                transform.rotation = Quaternion.LookRotation(horizontalDir);
+            }
+
+            if (m_AttackCheckBlock.HasValue && IsInAttackRange(m_AttackCheckBlock.Value))
             {
                 OnReachedAttackRange();
             }
@@ -236,13 +293,11 @@ namespace Minecraft.PlayerControls
 
         private void OnReachedTarget()
         {
-            Debug.Log($"[PathfindingMovement] Reached target");
             StopMovement();
         }
 
         private void OnReachedAttackRange()
         {
-            Debug.Log($"[PathfindingMovement] In attack range of {m_TargetBlock}");
             m_IsMoving = false;
         }
 
@@ -263,7 +318,129 @@ namespace Minecraft.PlayerControls
         private Vector3Int GetPlayerGridPosition()
         {
             Vector3 pos = m_PlayerEntity.Position;
-            return new Vector3Int(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(pos.y), Mathf.FloorToInt(pos.z));
+            return new Vector3Int(Mathf.FloorToInt(pos.x), GetPlayerWalkableGridY(pos), Mathf.FloorToInt(pos.z));
+        }
+
+        private int GetPlayerWalkableGridY(Vector3 worldPosition)
+        {
+            // Pathfinding y means the "feet block space" (air above solid ground), not entity center y.
+            float feetY = worldPosition.y + m_PlayerEntity.BoundingBox.Min.y + 0.01f;
+            return Mathf.FloorToInt(feetY);
+        }
+
+        private void TryRecoverFromStuck(Vector3 currentPos, float horizontalDistance, bool needsJump)
+        {
+            if (!m_IsMoving || m_CurrentPath == null || !m_TargetBlock.HasValue)
+            {
+                return;
+            }
+
+            if (needsJump)
+            {
+                // Let jump resolve first before considering this as a stuck scenario.
+                m_LastStuckCheckPos = currentPos;
+                m_LastStuckCheckTime = Time.time;
+                return;
+            }
+
+            float now = Time.time;
+            if (now - m_LastStuckCheckTime < StuckCheckInterval)
+            {
+                return;
+            }
+
+            float progress = Vector2.Distance(
+                new Vector2(currentPos.x, currentPos.z),
+                new Vector2(m_LastStuckCheckPos.x, m_LastStuckCheckPos.z));
+
+            m_LastStuckCheckPos = currentPos;
+            m_LastStuckCheckTime = now;
+
+            if (progress >= MinProgressDistance || horizontalDistance < Mathf.Max(WaypointThreshold, 0.2f))
+            {
+                return;
+            }
+
+            if (now - m_LastRepathTime < RepathCooldown)
+            {
+                return;
+            }
+
+            m_LastRepathTime = now;
+
+            TryRepath();
+        }
+
+        private bool TryRepath()
+        {
+            if (!m_TargetBlock.HasValue)
+            {
+                return false;
+            }
+
+            Vector3Int startPos = GetPlayerGridPosition();
+            List<Vector3Int> newPath = FindPathUsingConfiguredStrategy(startPos, m_TargetBlock.Value);
+            if (newPath == null || newPath.Count == 0)
+            {
+                return false;
+            }
+
+            m_CurrentPath = AStarPathfinding.SimplifyPath(newPath);
+            m_CurrentPathIndex = 0;
+            m_IsMoving = true;
+            m_LastStuckCheckPos = m_PlayerEntity.Position;
+            m_LastStuckCheckTime = Time.time;
+            UpdatePathVisuals();
+            return true;
+        }
+
+        private List<Vector3Int> FindPathUsingConfiguredStrategy(Vector3Int startPos, Vector3Int targetBlock)
+        {
+            List<Vector3Int> path = null;
+            IWorld world = m_PlayerEntity.World;
+
+            if (PreferFlowField)
+            {
+                float flowStartTime = Time.realtimeSinceStartup;
+                path = FlowFieldPathfinding.FindPath(
+                    startPos,
+                    targetBlock,
+                    world,
+                    Mathf.Max(1000, FlowFieldMaxNodes),
+                    Mathf.Max(0.05f, FlowFieldCacheLifetime),
+                    Mathf.Max(2, FlowFieldSearchRadius),
+                    Mathf.Max(16, FlowFieldMaxPathLength),
+                    out int flowBuildExpandedNodes,
+                    out int flowIntegrationNodeCount,
+                    out int flowTraceSteps,
+                    out bool flowCacheHit);
+                float flowMs = (Time.realtimeSinceStartup - flowStartTime) * 1000f;
+
+                if (LogPathfindingStats)
+                {
+                    Debug.Log(
+                        $"[Pathfinding][FlowField] success={path != null && path.Count > 0} " +
+                        $"timeMs={flowMs:F3} cacheHit={flowCacheHit} " +
+                        $"buildExpanded={flowBuildExpandedNodes} integrationNodes={flowIntegrationNodeCount} traceSteps={flowTraceSteps} " +
+                        $"start={startPos} end={targetBlock}");
+                }
+            }
+
+            if (path == null || path.Count == 0)
+            {
+                float aStarStartTime = Time.realtimeSinceStartup;
+                path = AStarPathfinding.FindPath(startPos, targetBlock, world, 5000, out int aStarExpandedNodes);
+                float aStarMs = (Time.realtimeSinceStartup - aStarStartTime) * 1000f;
+
+                if (LogPathfindingStats)
+                {
+                    Debug.Log(
+                        $"[Pathfinding][AStar] success={path != null && path.Count > 0} " +
+                        $"timeMs={aStarMs:F3} expandedNodes={aStarExpandedNodes} start={startPos} end={targetBlock}");
+                }
+            }
+
+            return path;
         }
 
         private void UpdatePathVisuals()

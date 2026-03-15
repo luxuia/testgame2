@@ -1943,7 +1943,7 @@ MonoBehaviour:
   m_ChunkManager: {fileID: 1629136768}
   m_RenderingManager: {fileID: 1622100263}
   m_EntityManager: {fileID: 623246310}
-  m_Seed: 0
+  m_Seed: 1234
   m_MaxTickBlockCountPerFrame: 500
   m_MaxLightBlockCountPerFrame: 1000
 --- !u!114 &1071869617
@@ -3041,6 +3041,63 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_HorizontalFit: 2
   m_VerticalFit: 2
+--- !u!1 &1978130906
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1978130908}
+  - component: {fileID: 1978130907}
+  m_Layer: 0
+  m_Name: Stress
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1978130907
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1978130906}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a6447fd2b60a6649a2db0114c16cc4f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  AutoFindAgents: 1
+  ForceSharedTarget: 1
+  Agents: []
+  SpawnOnStart: 0
+  AgentPrefab: {fileID: 0}
+  SpawnCount: 1
+  SpawnRadius: 24
+  SpawnSearchRadius: 16
+  TargetTransform: {fileID: 2378111722045569734}
+  StaticTarget: {x: 0, y: 64, z: 0}
+  FlowFieldMaxNodes: 25000
+  FlowFieldCacheLifetime: 0.25
+  FlowFieldSearchRadius: 12
+--- !u!4 &1978130908
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1978130906}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1997422778
 GameObject:
   m_ObjectHideFlags: 0
@@ -3247,3 +3304,4 @@ SceneRoots:
   - {fileID: 1053313430}
   - {fileID: 514173234}
   - {fileID: 1743795463}
+  - {fileID: 1978130908}

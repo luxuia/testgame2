@@ -1,0 +1,11 @@
+[AStar] FindPath from (0, 64, -10) to (-4, 63, -11)
+[AStar] End (-4, 63, -11) is not walkable, finding nearest walkable
+[AStar] Found nearest walkable: (-4, 64, -11)
+[AStar] Start (0, 64, -10) is not walkable, finding nearest walkable
+[AStar] Found nearest walkable start: (-1, 63, -10)
+[AStar] Starting search from (-1, 63, -10) to (-4, 64, -11)
+[AStar] Iteration 1: current=(-1, 63, -10), fScore=5, distToEnd=5, openSet=0
+[AStar] Iteration 10: current=(-1, 62, -7), fScore=12.41421, distToEnd=9, openSet=1
+[AStar] Iteration 50: current=(-6, 61, -2), fScore=27.82843, distToEnd=14, openSet=11
+[AStar] Iteration 100: current=(-11, 62, -1), fScore=38.41422, distToEnd=19, openSet=12
+[AStar] No path found after 100 iterations, openSet count: 14

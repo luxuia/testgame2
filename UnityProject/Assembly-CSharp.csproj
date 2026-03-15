@@ -101,6 +101,7 @@
     <Compile Include="Assets\Scripts\PhysicSystem\BlockRaycastHit.cs" />
     <Compile Include="Assets\Scripts\Collections\PriorityQueue.cs" />
     <Compile Include="Assets\Scripts\InspectorExtensions\ConditionalDisplayAttribute.cs" />
+    <Compile Include="Assets\Scripts\Pathfinding\CrowdFlowFieldCoordinator.cs" />
     <Compile Include="Assets\XLua\Src\LuaDLL.cs" />
     <Compile Include="Assets\XLua\Src\LuaException.cs" />
     <Compile Include="Assets\Scripts\WorldConsts.cs" />
@@ -164,6 +165,7 @@
     <Compile Include="Assets\Scripts\Lua\ICSharpCallLua.cs" />
     <Compile Include="Assets\Scripts\Noises\UniformRNG.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\GenLayers\StatelessGenLayer.cs" />
+    <Compile Include="Assets\Scripts\Pathfinding\CrowdAgentController.cs" />
     <Compile Include="Assets\Scripts\Rendering\BlockMeshBuilder.cs" />
     <Compile Include="Assets\Scripts\Utils\FPSCounter.cs" />
     <Compile Include="Assets\Scripts\PlayerControls\BlockInteraction.cs" />
@@ -1098,10 +1100,6 @@
     <ProjectReference Include="Unity.ScriptableBuildPipeline.csproj">
       <Project>{6DD81954-B453-51CD-0D37-B380C0B915EF}</Project>
       <Name>Unity.ScriptableBuildPipeline</Name>
-    </ProjectReference>
-    <ProjectReference Include="Unity.Rider.Editor.csproj">
-      <Project>{94F827D3-61C0-7CBC-A190-3E2F80AC6577}</Project>
-      <Name>Unity.Rider.Editor</Name>
     </ProjectReference>
     <ProjectReference Include="Unity.2D.Sprite.Editor.csproj">
       <Project>{0E10E4C8-92F6-6EC0-9C24-1C7FC9E40C44}</Project>

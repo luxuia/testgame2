@@ -1,31 +1,14 @@
+using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using Minecraft.Collections;
 using Minecraft.PhysicSystem;
 using UnityEngine;
 
 namespace Minecraft.Pathfinding
 {
-    /// <summary>
-    /// A*寻路算法实现，用于体素世界中的路径查找
-    /// </summary>
     public static class AStarPathfinding
     {
-        private static readonly Vector3Int[] s_NeighborOffsets = new Vector3Int[]
-        {
-            new Vector3Int(1, 0, 0),
-            new Vector3Int(-1, 0, 0),
-            new Vector3Int(0, 0, 1),
-            new Vector3Int(0, 0, -1),
-            new Vector3Int(1, 1, 0),
-            new Vector3Int(-1, 1, 0),
-            new Vector3Int(0, 1, 1),
-            new Vector3Int(0, 1, -1),
-            new Vector3Int(1, -1, 0),
-            new Vector3Int(-1, -1, 0),
-            new Vector3Int(0, -1, 1),
-            new Vector3Int(0, -1, -1),
-        };
-
         private static readonly Vector3Int[] s_CardinalOffsets = new Vector3Int[]
         {
             new Vector3Int(1, 0, 0),
@@ -33,105 +16,120 @@ namespace Minecraft.Pathfinding
             new Vector3Int(0, 0, 1),
             new Vector3Int(0, 0, -1),
         };
+        private static readonly Vector3Int[] s_DiagonalOffsets = new Vector3Int[]
+        {
+            new Vector3Int(1, 0, 1),
+            new Vector3Int(1, 0, -1),
+            new Vector3Int(-1, 0, 1),
+            new Vector3Int(-1, 0, -1),
+        };
 
-        /// <summary>
-        /// 查找从起点到终点的路径
-        /// </summary>
-        /// <param name="start">起点坐标</param>
-        /// <param name="end">终点坐标</param>
-        /// <param name="world">世界引用</param>
-        /// <param name="maxIterations">最大迭代次数</param>
-        /// <returns>路径点列表，如果找不到路径则返回null</returns>
         public static List<Vector3Int> FindPath(Vector3Int start, Vector3Int end, IWorld world, int maxIterations = 1000)
         {
-            Debug.Log($"[AStar] FindPath from {start} to {end}");
+            return FindPath(start, end, world, maxIterations, out _);
+        }
 
-            Vector3Int adjustedEnd = end;
+        public static List<Vector3Int> FindPath(Vector3Int start, Vector3Int end, IWorld world, int maxIterations, out int expandedNodes)
+        {
+            expandedNodes = 0;
+
+            Vector3Int? adjustedEnd = end;
             if (!IsWalkable(end, world))
             {
-                Debug.Log($"[AStar] End {end} is not walkable, finding nearest walkable");
-                adjustedEnd = FindNearestWalkable(end, world, 5);
-                if (adjustedEnd == Vector3Int.down)
+                adjustedEnd = FindNearestWalkableNode(end, world, 10);
+                if (!adjustedEnd.HasValue)
                 {
-                    Debug.Log($"[AStar] No walkable position found near target");
                     return null;
                 }
-                Debug.Log($"[AStar] Found nearest walkable: {adjustedEnd}");
             }
 
-            Vector3Int adjustedStart = start;
+            Vector3Int? adjustedStart = start;
             if (!IsWalkable(start, world))
             {
-                Debug.Log($"[AStar] Start {start} is not walkable, finding nearest walkable");
-                adjustedStart = FindNearestWalkable(start, world, 5);
-                if (adjustedStart == Vector3Int.down)
+                adjustedStart = FindNearestWalkableNode(start, world, 10);
+                if (!adjustedStart.HasValue)
                 {
-                    Debug.Log($"[AStar] No walkable position found near start");
                     return null;
                 }
-                Debug.Log($"[AStar] Found nearest walkable start: {adjustedStart}");
             }
 
-            var openSet = new PriorityQueue<PathNode>();
+            var openSet = new List<Vector3Int>();
+            var openSetF = new Dictionary<Vector3Int, float>();
             var closedSet = new HashSet<Vector3Int>();
             var cameFrom = new Dictionary<Vector3Int, Vector3Int>();
             var gScore = new Dictionary<Vector3Int, float>();
             var fScore = new Dictionary<Vector3Int, float>();
 
-            gScore[adjustedStart] = 0;
-            fScore[adjustedStart] = Heuristic(adjustedStart, adjustedEnd);
-
-            openSet.Enqueue(new PathNode(adjustedStart, fScore[adjustedStart]));
+            float startF = Heuristic(adjustedStart.Value, adjustedEnd.Value);
+            gScore[adjustedStart.Value] = 0;
+            fScore[adjustedStart.Value] = startF;
+            openSet.Add(adjustedStart.Value);
+            openSetF[adjustedStart.Value] = startF;
 
             int iterations = 0;
             while (openSet.Count > 0 && iterations < maxIterations)
             {
                 iterations++;
+                expandedNodes = iterations;
 
-                PathNode current = openSet.Dequeue();
-                Vector3Int currentPos = current.Position;
+                float lowestF = float.MaxValue;
+                float lowestH = float.MaxValue;
+                int lowestIndex = 0;
+                for (int i = 0; i < openSet.Count; i++)
+                {
+                    Vector3Int pos = openSet[i];
+                    float f = openSetF[pos];
+                    float h = Heuristic(pos, adjustedEnd.Value);
+                    
+                    if (f < lowestF || (f == lowestF && h < lowestH))
+                    {
+                        lowestF = f;
+                        lowestH = h;
+                        lowestIndex = i;
+                    }
+                }
+
+                Vector3Int currentPos = openSet[lowestIndex];
+                openSet.RemoveAt(lowestIndex);
+                openSetF.Remove(currentPos);
 
                 if (currentPos == adjustedEnd)
                 {
-                    var path = ReconstructPath(cameFrom, currentPos);
-                    Debug.Log($"[AStar] Path found with {path.Count} nodes after {iterations} iterations");
-                    for (int i = 0; i < path.Count; i++)
-                    {
-                        Debug.Log($"[AStar] Path node {i}: {path[i]}");
-                    }
-                    return path;
+                    return ReconstructPath(cameFrom, currentPos);
                 }
 
                 closedSet.Add(currentPos);
 
-                foreach (Vector3Int neighbor in GetNeighbors(currentPos, world))
+                foreach (Vector3Int neighbor in EnumerateNeighbors(currentPos, world, true))
                 {
                     if (closedSet.Contains(neighbor))
                     {
                         continue;
                     }
 
-                    float tentativeGScore = gScore[currentPos] + GetDistance(currentPos, neighbor);
+                    float tentativeGScore = gScore[currentPos] + GetTravelCost(currentPos, neighbor);
+                    float newF = tentativeGScore + Heuristic(neighbor, adjustedEnd.Value);
 
-                    if (!gScore.ContainsKey(neighbor) || tentativeGScore < gScore[neighbor])
+                    if (!fScore.ContainsKey(neighbor) || newF < fScore[neighbor])
                     {
+                        if (openSet.Contains(neighbor))
+                        {
+                            openSet.Remove(neighbor);
+                        }
+
                         cameFrom[neighbor] = currentPos;
                         gScore[neighbor] = tentativeGScore;
-                        fScore[neighbor] = tentativeGScore + Heuristic(neighbor, adjustedEnd);
-
-                        openSet.Enqueue(new PathNode(neighbor, fScore[neighbor]));
+                        fScore[neighbor] = newF;
+                        openSet.Add(neighbor);
+                        openSetF[neighbor] = newF;
                     }
                 }
             }
 
-            Debug.Log($"[AStar] No path found after {iterations} iterations, openSet count: {openSet.Count}");
             return null;
         }
 
-        /// <summary>
-        /// 获取相邻的可行走节点
-        /// </summary>
-        private static IEnumerable<Vector3Int> GetNeighbors(Vector3Int pos, IWorld world)
+        public static IEnumerable<Vector3Int> EnumerateNeighbors(Vector3Int pos, IWorld world, bool includeDiagonal)
         {
             foreach (Vector3Int offset in s_CardinalOffsets)
             {
@@ -144,53 +142,73 @@ namespace Minecraft.Pathfinding
                 else
                 {
                     Vector3Int above = neighbor + Vector3Int.up;
-                    if (IsWalkable(above, world) && IsWalkable(pos + Vector3Int.up, world))
+                    if (IsWalkable(above, world) && CanMoveUp(pos, world))
                     {
                         yield return above;
                     }
 
                     Vector3Int below = neighbor + Vector3Int.down;
-                    if (IsWalkable(below, world) && IsWalkable(pos, world))
+                    if (IsWalkable(below, world))
                     {
                         yield return below;
                     }
                 }
             }
 
-            Vector3Int upPos = pos + Vector3Int.up;
-            if (IsWalkable(upPos, world) && IsWalkable(pos, world))
+            if (!includeDiagonal)
             {
-                yield return upPos;
+                yield break;
             }
 
-            Vector3Int downPos = pos + Vector3Int.down;
-            if (IsWalkable(downPos, world) && IsWalkable(pos, world))
+            foreach (Vector3Int offset in s_DiagonalOffsets)
             {
-                yield return downPos;
+                Vector3Int diagonal = pos + offset;
+                if (!IsWalkable(diagonal, world))
+                {
+                    continue;
+                }
+
+                // Prevent corner cutting by requiring both orthogonal side cells to be walkable.
+                Vector3Int sideA = pos + new Vector3Int(offset.x, 0, 0);
+                Vector3Int sideB = pos + new Vector3Int(0, 0, offset.z);
+                if (!IsWalkable(sideA, world) || !IsWalkable(sideB, world))
+                {
+                    continue;
+                }
+
+                yield return diagonal;
             }
         }
 
-        /// <summary>
-        /// 检查位置是否可行走
-        /// </summary>
+        private static bool CanMoveUp(Vector3Int pos, IWorld world)
+        {
+            var blockAbove = world.RWAccessor.GetBlock(pos.x, pos.y + 1, pos.z);
+            return blockAbove == null || blockAbove.PhysicState != PhysicState.Solid;
+        }
+
+        public static bool IsWalkableNode(Vector3Int pos, IWorld world) => IsWalkable(pos, world);
+
         private static bool IsWalkable(Vector3Int pos, IWorld world)
         {
+            if (pos.y < 0)
+                return false;
+                
             var block = world.RWAccessor.GetBlock(pos.x, pos.y, pos.z);
-            if (block == null || block.PhysicState != PhysicState.Solid)
-            {
-                var groundBlock = world.RWAccessor.GetBlock(pos.x, pos.y - 1, pos.z);
-                return groundBlock != null && groundBlock.PhysicState == PhysicState.Solid;
-            }
-            return false;
+            bool hasBlock = block != null && block.PhysicState == PhysicState.Solid;
+            
+            if (hasBlock)
+                return false;
+                
+            var groundBlock = world.RWAccessor.GetBlock(pos.x, pos.y - 1, pos.z);
+            bool hasGround = groundBlock != null && groundBlock.PhysicState == PhysicState.Solid;
+            
+            return hasGround;
         }
 
-        /// <summary>
-        /// 查找最近的可行走位置
-        /// </summary>
-        private static Vector3Int FindNearestWalkable(Vector3Int pos, IWorld world, int searchRadius)
+        public static Vector3Int? FindNearestWalkableNode(Vector3Int pos, IWorld world, int searchRadius)
         {
             float bestDist = float.MaxValue;
-            Vector3Int bestPos = Vector3Int.down;
+            Vector3Int? bestPos = null;
 
             for (int x = -searchRadius; x <= searchRadius; x++)
             {
@@ -215,22 +233,21 @@ namespace Minecraft.Pathfinding
             return bestPos;
         }
 
-        /// <summary>
-        /// 启发式函数（曼哈顿距离）
-        /// </summary>
         private static float Heuristic(Vector3Int a, Vector3Int b)
         {
             return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y) + Mathf.Abs(a.z - b.z);
         }
 
-        /// <summary>
-        /// 获取两点之间的移动成本
-        /// </summary>
-        private static float GetDistance(Vector3Int a, Vector3Int b)
+        public static float GetTravelCost(Vector3Int a, Vector3Int b)
         {
             int dx = Mathf.Abs(a.x - b.x);
             int dy = Mathf.Abs(a.y - b.y);
             int dz = Mathf.Abs(a.z - b.z);
+
+            if (dx == 1 && dz == 1 && dy == 0)
+            {
+                return 1.4142135f;
+            }
 
             if (dy > 0)
             {
@@ -239,9 +256,6 @@ namespace Minecraft.Pathfinding
             return dx + dz;
         }
 
-        /// <summary>
-        /// 重建路径
-        /// </summary>
         private static List<Vector3Int> ReconstructPath(Dictionary<Vector3Int, Vector3Int> cameFrom, Vector3Int current)
         {
             var path = new List<Vector3Int> { current };
@@ -255,9 +269,6 @@ namespace Minecraft.Pathfinding
             return path;
         }
 
-        /// <summary>
-        /// 简化路径，移除多余的中间点
-        /// </summary>
         public static List<Vector3Int> SimplifyPath(List<Vector3Int> path)
         {
             if (path == null || path.Count <= 2)
@@ -266,40 +277,436 @@ namespace Minecraft.Pathfinding
             }
 
             var simplified = new List<Vector3Int> { path[0] };
-            Vector3Int lastDirection = Vector3Int.zero;
+            Vector3Int lastDirection = path[1] - path[0];
 
-            for (int i = 1; i < path.Count; i++)
+            for (int i = 1; i < path.Count - 1; i++)
             {
-                Vector3Int direction = path[i] - path[i - 1];
-                if (direction != lastDirection)
+                Vector3Int nextDirection = path[i + 1] - path[i];
+                bool hasHeightChange = path[i].y != path[i - 1].y || path[i + 1].y != path[i].y;
+
+                // Preserve every waypoint around vertical movement to avoid losing jump/fall key points.
+                if (hasHeightChange || nextDirection != lastDirection)
                 {
-                    simplified.Add(path[i - 1]);
-                    lastDirection = direction;
+                    if (simplified[simplified.Count - 1] != path[i])
+                    {
+                        simplified.Add(path[i]);
+                    }
                 }
+
+                lastDirection = nextDirection;
             }
 
-            simplified.Add(path[path.Count - 1]);
+            Vector3Int lastPoint = path[path.Count - 1];
+            if (simplified[simplified.Count - 1] != lastPoint)
+            {
+                simplified.Add(lastPoint);
+            }
+
             return simplified;
         }
     }
 
-    /// <summary>
-    /// 路径节点
-    /// </summary>
-    public readonly struct PathNode : System.IComparable<PathNode>
+    public static class FlowFieldPathfinding
     {
-        public readonly Vector3Int Position;
-        public readonly float FScore;
-
-        public PathNode(Vector3Int position, float fScore)
+        private readonly struct CacheKey : IEquatable<CacheKey>
         {
-            Position = position;
-            FScore = fScore;
+            public readonly int WorldHash;
+            public readonly Vector3Int Target;
+
+            public CacheKey(int worldHash, Vector3Int target)
+            {
+                WorldHash = worldHash;
+                Target = target;
+            }
+
+            public bool Equals(CacheKey other) => WorldHash == other.WorldHash && Target == other.Target;
+            public override bool Equals(object obj) => obj is CacheKey other && Equals(other);
+            public override int GetHashCode() => (WorldHash * 397) ^ Target.GetHashCode();
         }
 
-        public int CompareTo(PathNode other)
+        private readonly struct FrontierNode : IComparable<FrontierNode>
         {
-            return FScore.CompareTo(other.FScore);
+            public readonly Vector3Int Position;
+            public readonly float Cost;
+
+            public FrontierNode(Vector3Int position, float cost)
+            {
+                Position = position;
+                Cost = cost;
+            }
+
+            public int CompareTo(FrontierNode other) => Cost.CompareTo(other.Cost);
+        }
+
+        private sealed class FlowFieldData
+        {
+            public readonly Vector3Int Target;
+            public readonly Dictionary<Vector3Int, float> IntegrationCost;
+            public readonly float BuiltAtTime;
+            public readonly int ExpandedNodes;
+            public readonly int IntegrationNodeCount;
+
+            public FlowFieldData(Vector3Int target, Dictionary<Vector3Int, float> integrationCost, float builtAtTime, int expandedNodes)
+            {
+                Target = target;
+                IntegrationCost = integrationCost;
+                BuiltAtTime = builtAtTime;
+                ExpandedNodes = expandedNodes;
+                IntegrationNodeCount = integrationCost != null ? integrationCost.Count : 0;
+            }
+        }
+
+        private static readonly Dictionary<CacheKey, FlowFieldData> s_Cache = new Dictionary<CacheKey, FlowFieldData>();
+        private static readonly List<CacheKey> s_RemoveBuffer = new List<CacheKey>();
+        private static readonly Dictionary<CacheKey, int> s_BuiltFrameByKey = new Dictionary<CacheKey, int>();
+        private static readonly HashSet<Vector3Int> s_UniqueTargetsBuffer = new HashSet<Vector3Int>();
+        private static readonly Dictionary<CacheKey, float> s_FailedUntilByRequestedTarget = new Dictionary<CacheKey, float>();
+
+        public static List<Vector3Int> FindPath(
+            Vector3Int start,
+            Vector3Int end,
+            IWorld world,
+            int maxNodes,
+            float cacheLifetime,
+            int searchRadius,
+            int maxPathLength)
+        {
+            return FindPath(
+                start,
+                end,
+                world,
+                maxNodes,
+                cacheLifetime,
+                searchRadius,
+                maxPathLength,
+                out _,
+                out _,
+                out _,
+                out _);
+        }
+
+        public static List<Vector3Int> FindPath(
+            Vector3Int start,
+            Vector3Int end,
+            IWorld world,
+            int maxNodes,
+            float cacheLifetime,
+            int searchRadius,
+            int maxPathLength,
+            out int buildExpandedNodes,
+            out int integrationNodeCount,
+            out int traceSteps,
+            out bool cacheHit)
+        {
+            buildExpandedNodes = 0;
+            integrationNodeCount = 0;
+            traceSteps = 0;
+            cacheHit = false;
+
+            if (!TryGetOrBuildField(end, world, maxNodes, cacheLifetime, searchRadius, out FlowFieldData field, out cacheHit))
+            {
+                return null;
+            }
+
+            buildExpandedNodes = field.ExpandedNodes;
+            integrationNodeCount = field.IntegrationNodeCount;
+            return TracePath(start, field, world, searchRadius, maxPathLength, out traceSteps);
+        }
+
+        public static void PrepareFields(
+            IWorld world,
+            IEnumerable<Vector3Int> targets,
+            int maxNodes,
+            float cacheLifetime,
+            int searchRadius)
+        {
+            if (world == null || targets == null)
+            {
+                return;
+            }
+
+            s_UniqueTargetsBuffer.Clear();
+
+            foreach (Vector3Int target in targets)
+            {
+                if (!s_UniqueTargetsBuffer.Add(target))
+                {
+                    continue;
+                }
+
+                TryGetOrBuildField(target, world, maxNodes, cacheLifetime, searchRadius, out _, out _);
+            }
+        }
+
+        public static bool TryGetNextNode(
+            Vector3Int current,
+            Vector3Int end,
+            IWorld world,
+            int maxNodes,
+            float cacheLifetime,
+            int searchRadius,
+            out Vector3Int nextNode)
+        {
+            nextNode = current;
+
+            if (!TryGetOrBuildField(end, world, maxNodes, cacheLifetime, searchRadius, out FlowFieldData field, out _))
+            {
+                return false;
+            }
+
+            Vector3Int? adjustedCurrent = AStarPathfinding.IsWalkableNode(current, world)
+                ? current
+                : AStarPathfinding.FindNearestWalkableNode(current, world, searchRadius);
+            if (!adjustedCurrent.HasValue)
+            {
+                return false;
+            }
+
+            if (!field.IntegrationCost.TryGetValue(adjustedCurrent.Value, out float currentCost))
+            {
+                return false;
+            }
+
+            if (adjustedCurrent.Value == field.Target)
+            {
+                nextNode = field.Target;
+                return true;
+            }
+
+            Vector3Int bestNeighbor = adjustedCurrent.Value;
+            float bestCost = currentCost;
+
+            foreach (Vector3Int neighbor in AStarPathfinding.EnumerateNeighbors(adjustedCurrent.Value, world, true))
+            {
+                if (!field.IntegrationCost.TryGetValue(neighbor, out float neighborCost))
+                {
+                    continue;
+                }
+
+                if (neighborCost < bestCost - 0.0001f)
+                {
+                    bestCost = neighborCost;
+                    bestNeighbor = neighbor;
+                }
+            }
+
+            if (bestNeighbor == adjustedCurrent.Value)
+            {
+                return false;
+            }
+
+            nextNode = bestNeighbor;
+            return true;
+        }
+
+        public static void InvalidateWorld(IWorld world)
+        {
+            if (world == null)
+            {
+                return;
+            }
+
+            int worldHash = RuntimeHelpers.GetHashCode(world);
+            s_RemoveBuffer.Clear();
+
+            foreach (KeyValuePair<CacheKey, FlowFieldData> entry in s_Cache)
+            {
+                if (entry.Key.WorldHash == worldHash)
+                {
+                    s_RemoveBuffer.Add(entry.Key);
+                }
+            }
+
+            for (int i = 0; i < s_RemoveBuffer.Count; i++)
+            {
+                CacheKey key = s_RemoveBuffer[i];
+                s_Cache.Remove(key);
+                s_BuiltFrameByKey.Remove(key);
+                s_FailedUntilByRequestedTarget.Remove(key);
+            }
+        }
+
+        private static bool TryGetOrBuildField(
+            Vector3Int end,
+            IWorld world,
+            int maxNodes,
+            float cacheLifetime,
+            int searchRadius,
+            out FlowFieldData field,
+            out bool cacheHit)
+        {
+            field = null;
+            cacheHit = false;
+
+            if (world == null)
+            {
+                return false;
+            }
+
+            float now = Time.time;
+            int worldHash = RuntimeHelpers.GetHashCode(world);
+            CacheKey requestedKey = new CacheKey(worldHash, end);
+
+            if (s_FailedUntilByRequestedTarget.TryGetValue(requestedKey, out float retryAfter) && now < retryAfter)
+            {
+                return false;
+            }
+
+            Vector3Int? adjustedEnd = AStarPathfinding.IsWalkableNode(end, world)
+                ? end
+                : AStarPathfinding.FindNearestWalkableNode(end, world, searchRadius);
+            if (!adjustedEnd.HasValue)
+            {
+                s_FailedUntilByRequestedTarget[requestedKey] = now + Mathf.Max(cacheLifetime, 0.1f);
+                return false;
+            }
+
+            CacheKey key = new CacheKey(worldHash, adjustedEnd.Value);
+            s_FailedUntilByRequestedTarget.Remove(requestedKey);
+
+            bool validCache = s_Cache.TryGetValue(key, out field) && now - field.BuiltAtTime <= cacheLifetime;
+            if (validCache)
+            {
+                cacheHit = true;
+                return true;
+            }
+
+            int frame = Time.frameCount;
+            if (s_BuiltFrameByKey.TryGetValue(key, out int builtFrame) && builtFrame == frame && field != null)
+            {
+                cacheHit = true;
+                return true;
+            }
+
+            field = BuildFlowField(adjustedEnd.Value, world, maxNodes, now);
+            if (field == null)
+            {
+                s_FailedUntilByRequestedTarget[requestedKey] = now + Mathf.Max(cacheLifetime, 0.1f);
+                return false;
+            }
+
+            s_Cache[key] = field;
+            s_BuiltFrameByKey[key] = frame;
+            CleanupExpired(now, Mathf.Max(cacheLifetime, 0.1f) * 3f);
+            return true;
+        }
+
+        private static FlowFieldData BuildFlowField(Vector3Int target, IWorld world, int maxNodes, float now)
+        {
+            if (!AStarPathfinding.IsWalkableNode(target, world))
+            {
+                return null;
+            }
+
+            var costs = new Dictionary<Vector3Int, float>(Mathf.Max(256, maxNodes));
+            var frontier = new PriorityQueue<FrontierNode>();
+
+            costs[target] = 0f;
+            frontier.Enqueue(new FrontierNode(target, 0f));
+
+            int expanded = 0;
+            while (frontier.Count > 0 && expanded < maxNodes)
+            {
+                FrontierNode current = frontier.Dequeue();
+                if (!costs.TryGetValue(current.Position, out float currentBest) || current.Cost > currentBest + 0.0001f)
+                {
+                    continue;
+                }
+
+                expanded++;
+
+                foreach (Vector3Int neighbor in AStarPathfinding.EnumerateNeighbors(current.Position, world, true))
+                {
+                    float nextCost = current.Cost + AStarPathfinding.GetTravelCost(current.Position, neighbor);
+                    if (costs.TryGetValue(neighbor, out float oldCost) && nextCost >= oldCost)
+                    {
+                        continue;
+                    }
+
+                    costs[neighbor] = nextCost;
+                    frontier.Enqueue(new FrontierNode(neighbor, nextCost));
+                }
+            }
+
+            return costs.Count > 0 ? new FlowFieldData(target, costs, now, expanded) : null;
+        }
+
+        private static List<Vector3Int> TracePath(Vector3Int start, FlowFieldData field, IWorld world, int searchRadius, int maxPathLength, out int traceSteps)
+        {
+            traceSteps = 0;
+            Vector3Int? adjustedStart = AStarPathfinding.IsWalkableNode(start, world)
+                ? start
+                : AStarPathfinding.FindNearestWalkableNode(start, world, searchRadius);
+            if (!adjustedStart.HasValue)
+            {
+                return null;
+            }
+
+            if (!field.IntegrationCost.ContainsKey(adjustedStart.Value))
+            {
+                return null;
+            }
+
+            var path = new List<Vector3Int>(32) { adjustedStart.Value };
+            Vector3Int current = adjustedStart.Value;
+
+            int steps = 0;
+            while (current != field.Target && steps < maxPathLength)
+            {
+                steps++;
+                traceSteps = steps;
+                if (!field.IntegrationCost.TryGetValue(current, out float currentCost))
+                {
+                    return null;
+                }
+
+                Vector3Int bestNeighbor = current;
+                float bestCost = currentCost;
+
+                foreach (Vector3Int neighbor in AStarPathfinding.EnumerateNeighbors(current, world, true))
+                {
+                    if (!field.IntegrationCost.TryGetValue(neighbor, out float neighborCost))
+                    {
+                        continue;
+                    }
+
+                    if (neighborCost < bestCost - 0.0001f)
+                    {
+                        bestCost = neighborCost;
+                        bestNeighbor = neighbor;
+                    }
+                }
+
+                if (bestNeighbor == current)
+                {
+                    return null;
+                }
+
+                path.Add(bestNeighbor);
+                current = bestNeighbor;
+            }
+
+            return current == field.Target ? path : null;
+        }
+
+        private static void CleanupExpired(float now, float expireAfterSeconds)
+        {
+            s_RemoveBuffer.Clear();
+
+            foreach (KeyValuePair<CacheKey, FlowFieldData> entry in s_Cache)
+            {
+                if (now - entry.Value.BuiltAtTime > expireAfterSeconds)
+                {
+                    s_RemoveBuffer.Add(entry.Key);
+                }
+            }
+
+            for (int i = 0; i < s_RemoveBuffer.Count; i++)
+            {
+                CacheKey key = s_RemoveBuffer[i];
+                s_Cache.Remove(key);
+                s_BuiltFrameByKey.Remove(key);
+            }
         }
     }
 }

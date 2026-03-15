@@ -1024,10 +1024,6 @@
       <Project>{6DD81954-B453-51CD-0D37-B380C0B915EF}</Project>
       <Name>Unity.ScriptableBuildPipeline</Name>
     </ProjectReference>
-    <ProjectReference Include="Unity.Rider.Editor.csproj">
-      <Project>{94F827D3-61C0-7CBC-A190-3E2F80AC6577}</Project>
-      <Name>Unity.Rider.Editor</Name>
-    </ProjectReference>
     <ProjectReference Include="Unity.2D.Sprite.Editor.csproj">
       <Project>{0E10E4C8-92F6-6EC0-9C24-1C7FC9E40C44}</Project>
       <Name>Unity.2D.Sprite.Editor</Name>

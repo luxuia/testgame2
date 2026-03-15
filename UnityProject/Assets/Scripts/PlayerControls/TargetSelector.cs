@@ -2,7 +2,6 @@ using System;
 using Minecraft.Entities;
 using Minecraft.PhysicSystem;
 using Minecraft.Rendering;
-using Minecraft.UI;
 using UnityEngine;
 using UnityEngine.Events;
 using Physics = Minecraft.PhysicSystem.Physics;
@@ -15,6 +14,14 @@ namespace Minecraft.PlayerControls
     [DisallowMultipleComponent]
     public class TargetSelector : MonoBehaviour
     {
+        private static readonly Vector3Int[] s_StandSearchOffsets = new Vector3Int[]
+        {
+            new Vector3Int(1, 0, 0),
+            new Vector3Int(-1, 0, 0),
+            new Vector3Int(0, 0, 1),
+            new Vector3Int(0, 0, -1),
+        };
+
         [Header("选择设置")]
         [Tooltip("选择距离")]
         public float SelectionDistance = 50f;
@@ -28,36 +35,26 @@ namespace Minecraft.PlayerControls
 
         [NonSerialized] private Camera m_Camera;
         [NonSerialized] private IAABBEntity m_PlayerEntity;
-        [NonSerialized] private Vector3Int? m_SelectedTarget;
+        [NonSerialized] private Vector3Int? m_SelectedTargetBlock;
+        [NonSerialized] private Vector3Int? m_StandPosition;
         [NonSerialized] private GameObject m_TargetMarker;
         [NonSerialized] private LineRenderer m_SelectionLine;
+        [NonSerialized] private bool m_WasCursorLocked;
+        [NonSerialized] private Func<Configurations.BlockData, bool> m_SelectRaycastFilter;
 
-        /// <summary>
-        /// 目标选中事件
-        /// </summary>
+        public Vector3Int? SelectedTargetBlock => m_SelectedTargetBlock;
+        public Vector3Int? StandPosition => m_StandPosition;
+
         public event UnityAction<Vector3Int> OnTargetSelectedEvent;
-
-        /// <summary>
-        /// 目标清除事件
-        /// </summary>
         public event UnityAction OnTargetClearedEvent;
 
-        /// <summary>
-        /// 当前选中的目标
-        /// </summary>
-        public Vector3Int? SelectedTarget => m_SelectedTarget;
-
-        /// <summary>
-        /// 初始化目标选择器
-        /// </summary>
         public void Initialize(Camera camera, IAABBEntity playerEntity)
         {
             m_Camera = camera;
             m_PlayerEntity = playerEntity;
+            m_SelectRaycastFilter ??= SelectRaycastFilter;
             
             InitializeVisuals();
-            
-            Debug.Log($"[TargetSelector] Initialized, camera: {(m_Camera != null ? "valid" : "null")}, player: {(m_PlayerEntity != null ? "valid" : "null")}");
         }
 
         private void InitializeVisuals()
@@ -110,12 +107,37 @@ namespace Minecraft.PlayerControls
             }
         }
 
+        private void OnEnable()
+        {
+            m_SelectedTargetBlock = null;
+            m_StandPosition = null;
+            m_WasCursorLocked = Cursor.lockState == CursorLockMode.Locked;
+            
+            if (m_TargetMarker != null)
+            {
+                m_TargetMarker.SetActive(false);
+            }
+            
+            if (m_SelectionLine != null)
+            {
+                m_SelectionLine.enabled = false;
+            }
+        }
+
         private void Update()
         {
             if (m_Camera == null || m_PlayerEntity == null)
             {
                 return;
             }
+
+            bool isCursorLocked = Cursor.lockState == CursorLockMode.Locked;
+            if (m_WasCursorLocked && !isCursorLocked)
+            {
+                m_WasCursorLocked = isCursorLocked;
+                return;
+            }
+            m_WasCursorLocked = isCursorLocked;
 
             HandleInput();
             UpdateVisuals();
@@ -129,22 +151,25 @@ namespace Minecraft.PlayerControls
                 Ray ray = m_Camera.ScreenPointToRay(cursorPosition);
                 IWorld world = m_PlayerEntity.World;
 
-                Debug.Log($"[TargetSelector] Mouse clicked at cursor: {cursorPosition}, ray origin: {ray.origin}, direction: {ray.direction}");
-                Debug.Log($"[TargetSelector] World: {(world != null ? "valid" : "null")}");
+                if (Physics.RaycastBlock(ray, SelectionDistance, world, m_SelectRaycastFilter, out BlockRaycastHit hit))
+                {
+                    Vector3Int targetBlock = hit.Position;
+                    Vector3Int standPos = FindNearbyStandPosition(targetBlock, world);
 
-                if (Physics.RaycastBlock(ray, SelectionDistance, world, SelectRaycastFilter, out BlockRaycastHit hit))
-                {
-                    Debug.Log($"[TargetSelector] Hit block at: {hit.Position}");
+                    if (m_SelectedTargetBlock.HasValue &&
+                        m_StandPosition.HasValue &&
+                        m_SelectedTargetBlock.Value == targetBlock &&
+                        m_StandPosition.Value == standPos)
+                    {
+                        return;
+                    }
                     
-                    Vector3Int targetBlockPos = hit.Position;
-                    Vector3Int standPos = FindStandPosition(targetBlockPos, world);
+                    m_SelectedTargetBlock = targetBlock;
+                    m_StandPosition = standPos;
                     
-                    Debug.Log($"[TargetSelector] Target block: {targetBlockPos}, stand position: {standPos}");
-                    SelectTarget(targetBlockPos, standPos);
-                }
-                else
-                {
-                    Debug.Log($"[TargetSelector] No block hit");
+                    ShaderUtility.TargetedBlockPosition = targetBlock;
+                    m_OnTargetSelected?.Invoke(standPos);
+                    OnTargetSelectedEvent?.Invoke(standPos);
                 }
             }
 
@@ -154,18 +179,11 @@ namespace Minecraft.PlayerControls
             }
         }
 
-        private Vector3Int FindStandPosition(Vector3Int blockPos, IWorld world)
+        private Vector3Int FindNearbyStandPosition(Vector3Int blockPos, IWorld world)
         {
-            Vector3Int[] offsets = new Vector3Int[]
+            for (int i = 0; i < s_StandSearchOffsets.Length; i++)
             {
-                new Vector3Int(1, 0, 0),
-                new Vector3Int(-1, 0, 0),
-                new Vector3Int(0, 0, 1),
-                new Vector3Int(0, 0, -1),
-            };
-
-            foreach (var offset in offsets)
-            {
+                Vector3Int offset = s_StandSearchOffsets[i];
                 Vector3Int checkPos = blockPos + offset;
                 var block = world.RWAccessor.GetBlock(checkPos.x, checkPos.y, checkPos.z);
                 
@@ -186,7 +204,7 @@ namespace Minecraft.PlayerControls
         {
             if (Cursor.lockState == CursorLockMode.Locked)
             {
-                return CursorReticle.MousePos + new Vector2(Screen.width / 2f, Screen.height/2);
+                return Minecraft.UI.CursorReticle.MousePos + new Vector2(Screen.width / 2f, Screen.height/2);
             }
             return Input.mousePosition;
         }
@@ -196,47 +214,29 @@ namespace Minecraft.PlayerControls
             return block.PhysicState == PhysicState.Solid;
         }
 
-        /// <summary>
-        /// 选中目标
-        /// </summary>
-        public void SelectTarget(Vector3Int target)
-        {
-            m_SelectedTarget = target;
-            m_OnTargetSelected?.Invoke(target);
-            OnTargetSelectedEvent?.Invoke(target);
-            ShaderUtility.TargetedBlockPosition = target;
-
-
-            Debug.Log($"[TargetSelector] Selected target: {target}");
-        }
-
-        /// <summary>
-        /// 清除目标
-        /// </summary>
         public void ClearTarget()
         {
-            if (m_SelectedTarget.HasValue)
+            if (m_SelectedTargetBlock.HasValue)
             {
-                m_SelectedTarget = null;
+                m_SelectedTargetBlock = null;
+                m_StandPosition = null;
                 m_OnTargetCleared?.Invoke();
                 OnTargetClearedEvent?.Invoke();
                 ShaderUtility.TargetedBlockPosition = Vector3.down;
-
-                Debug.Log($"[TargetSelector] Target cleared");
             }
         }
 
         private void UpdateVisuals()
         {
-            if (m_SelectedTarget.HasValue)
+            if (m_SelectedTargetBlock.HasValue && m_StandPosition.HasValue)
             {
                 if (m_TargetMarker != null)
                 {
                     m_TargetMarker.SetActive(true);
                     m_TargetMarker.transform.position = new Vector3(
-                        m_SelectedTarget.Value.x + 0.5f,
-                        m_SelectedTarget.Value.y + 0.5f,
-                        m_SelectedTarget.Value.z + 0.5f
+                        m_SelectedTargetBlock.Value.x + 0.5f,
+                        m_SelectedTargetBlock.Value.y + 0.5f,
+                        m_SelectedTargetBlock.Value.z + 0.5f
                     );
                 }
 
@@ -245,9 +245,9 @@ namespace Minecraft.PlayerControls
                     m_SelectionLine.enabled = true;
                     m_SelectionLine.SetPosition(0, m_PlayerEntity.Position + Vector3.up);
                     m_SelectionLine.SetPosition(1, new Vector3(
-                        m_SelectedTarget.Value.x + 0.5f,
-                        m_SelectedTarget.Value.y + 0.5f,
-                        m_SelectedTarget.Value.z + 0.5f
+                        m_StandPosition.Value.x + 0.5f,
+                        m_StandPosition.Value.y + 0.5f,
+                        m_StandPosition.Value.z + 0.5f
                     ));
                 }
             }
@@ -272,14 +272,14 @@ namespace Minecraft.PlayerControls
 
         private void OnDrawGizmos()
         {
-            if (m_SelectedTarget.HasValue)
+            if (m_SelectedTargetBlock.HasValue)
             {
                 Gizmos.color = TargetMarkerColor;
                 Gizmos.DrawWireCube(
                     new Vector3(
-                        m_SelectedTarget.Value.x + 0.5f,
-                        m_SelectedTarget.Value.y + 0.5f,
-                        m_SelectedTarget.Value.z + 0.5f
+                        m_SelectedTargetBlock.Value.x + 0.5f,
+                        m_SelectedTargetBlock.Value.y + 0.5f,
+                        m_SelectedTargetBlock.Value.z + 0.5f
                     ),
                     Vector3.one * 1.1f
                 );
