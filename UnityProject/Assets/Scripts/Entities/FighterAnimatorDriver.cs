@@ -192,18 +192,51 @@ namespace Minecraft.Entities
                 return;
             }
 
-            Transform basis = reference != null ? reference : transform;
-            Vector3 localVelocity = basis.InverseTransformDirection(worldVelocity);
-            Vector2 planar = new Vector2(localVelocity.x, localVelocity.z);
-            float speed = planar.magnitude;
+            _ = reference;
+            _ = runRequested;
+
+            Vector3 planarVelocity = worldVelocity;
+            planarVelocity.y = 0f;
+            float speed = planarVelocity.magnitude;
             bool moving = speed > m_MinMoveSpeed && !m_Blocking && !m_Crouching;
 
-            bool walkForward = moving && localVelocity.z > m_ForwardThreshold;
-            bool walkBackward = moving && localVelocity.z < -m_ForwardThreshold;
-            bool walkLeft = moving && localVelocity.x < -m_StrafeThreshold;
-            bool walkRight = moving && localVelocity.x > m_StrafeThreshold;
-            bool run = moving && runRequested && walkForward;
-            bool walkSlow = moving && !run && walkForward;
+            bool run = false;
+            bool walkForward = false;
+            bool walkBackward = false;
+            bool walkLeft = false;
+            bool walkRight = false;
+            bool walkSlow = false;
+
+            if (moving)
+            {
+                Vector3 localDirection = transform.InverseTransformDirection(planarVelocity / speed);
+                bool directionMismatched = localDirection.z < 1f - m_ForwardThreshold;
+
+                if (!directionMismatched)
+                {
+                    run = true;
+                }
+                else
+                {
+                    float absX = Mathf.Abs(localDirection.x);
+                    float absZ = Mathf.Abs(localDirection.z);
+
+                    if (absX < m_StrafeThreshold && absZ < m_ForwardThreshold)
+                    {
+                        walkSlow = true;
+                    }
+                    else if (absZ >= absX)
+                    {
+                        walkForward = localDirection.z >= 0f;
+                        walkBackward = !walkForward;
+                    }
+                    else
+                    {
+                        walkRight = localDirection.x >= 0f;
+                        walkLeft = !walkRight;
+                    }
+                }
+            }
 
             SetLocomotion(run, walkForward, walkBackward, walkLeft, walkRight, walkSlow);
         }

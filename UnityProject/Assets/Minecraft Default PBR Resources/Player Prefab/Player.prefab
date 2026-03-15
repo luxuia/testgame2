@@ -167,6 +167,7 @@ MonoBehaviour:
   m_JumpBob:
     m_BobDuration: 0.2
     m_BobAmount: 0.1
+  m_FighterAnimator: {fileID: 0}
   m_OnStepOnBlock:
     m_PersistentCalls:
       m_Calls: []
@@ -301,6 +302,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Male
       objectReference: {fileID: 0}
+    - target: {fileID: 100114, guid: 3755496ec9163a345a79e3561f6a9af4, type: 3}
+      propertyPath: m_TagString
+      value: Untagged
+      objectReference: {fileID: 0}
     - target: {fileID: 400000, guid: 3755496ec9163a345a79e3561f6a9af4, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -343,13 +348,18 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 400114, guid: 3755496ec9163a345a79e3561f6a9af4, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -1.25
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 9500000, guid: 3755496ec9163a345a79e3561f6a9af4, type: 3}
+      propertyPath: m_ApplyRootMotion
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 11400000, guid: 3755496ec9163a345a79e3561f6a9af4, type: 3}
       propertyPath: m_Enabled
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 11400000, guid: 3755496ec9163a345a79e3561f6a9af4, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []

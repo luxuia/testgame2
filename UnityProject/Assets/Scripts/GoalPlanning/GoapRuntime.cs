@@ -1101,6 +1101,11 @@ namespace Minecraft.GoalPlanning
             return GoapStepFailureOutcome.RetryCurrentStep;
         }
 
+        public GoapStepFailureOutcome MarkCurrentStepFailed()
+        {
+            return MarkCurrentStepFailed(null);
+        }
+
         public bool IsPlanFinished()
         {
             return m_ActivePlan == null || m_CurrentIndex >= m_ActivePlan.Steps.Count;
