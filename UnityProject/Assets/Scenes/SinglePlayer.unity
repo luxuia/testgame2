@@ -2719,6 +2719,65 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1700851671}
   m_CullTransparentMesh: 1
+--- !u!1 &1723804279
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1723804281}
+  - component: {fileID: 1723804280}
+  m_Layer: 0
+  m_Name: Fungal
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1723804280
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1723804279}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7f14d419fdb54856ab1203797fdb8a5f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  InfectionToCompleteSeconds: 1.5
+  DamagedToCompleteSeconds: 2
+  StateMapSize: 192
+  StateMapHalfRange: 97
+  StateMapUpdateInterval: 0.08
+  m_OverlayTexture: {fileID: 2800000, guid: b9042fc50cf3eb042944505cfe9a6e32, type: 3}
+  OverlayStrength: 0.85
+  InfectingColor: {r: 0.35, g: 0.95, b: 0.65, a: 0.35}
+  DamagedColor: {r: 0.88, g: 0.36, b: 0.32, a: 0.65}
+  CompletedColor: {r: 0.2, g: 1, b: 0.7, a: 0.78}
+  AutoInfectFromWorldPlayer: 1
+  AutoInfectInterval: 0.08
+  AutoInfectMinMoveDistance: 0.05
+  MaxTrackedDistance: 768
+  CompletedCellLifetime: 120
+--- !u!4 &1723804281
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1723804279}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1743120564
 GameObject:
   m_ObjectHideFlags: 0
@@ -3052,7 +3111,7 @@ GameObject:
   - component: {fileID: 1978130908}
   - component: {fileID: 1978130907}
   m_Layer: 0
-  m_Name: Stress
+  m_Name: CrowdFlow
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3077,7 +3136,7 @@ MonoBehaviour:
   ForceSharedTarget: 1
   Agents: []
   SpawnOnStart: 0
-  AgentPrefab: {fileID: 0}
+  AgentPrefab: {fileID: 100000, guid: bc119a5e0660f66459fd40ac6aaa256e, type: 3}
   SpawnCount: 5
   SpawnPerFrame: 12
   SpawnRadius: 24
@@ -3098,10 +3157,13 @@ MonoBehaviour:
   FormationRebuildInterval: 0.35
   FormationMaxRings: 24
   FormationHandoverRadius: 5
+  FormationHandoverExitBuffer: 1.5
   EnableSharedTargetSmoothing: 1
   SharedTargetUpdateInterval: 0.2
   SharedTargetRebuildDistance: 1.5
   SharedTargetMaxLagDistance: 6
+  SharedTargetGridStep: 2
+  SharedTargetLockY: 1
   LimitMovingSharedTargetNodes: 1
   MovingSharedTargetMaxNodes: 8000
   EnableLocalAvoidance: 1
@@ -3112,8 +3174,12 @@ MonoBehaviour:
   MaxAvoidanceNeighbors: 8
   AvoidanceCellSize: 1.5
   AvoidanceMaxSpeedMultiplier: 1.15
+  AvoidanceFadeNearNodeDistance: 1.2
+  MaxPlanarAcceleration: 24
+  VelocityDeadzone: 0.08
   UseAdaptiveNodeBudget: 1
   NodesPerActiveAgent: 600
+  AutoAttachMiningJobManager: 1
 --- !u!4 &1978130908
 Transform:
   m_ObjectHideFlags: 0
@@ -3216,25 +3282,21 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 1698742635, guid: 168db0e3e15880d4cbea8de4699d3042, type: 3}
-      propertyPath: m_RunstepLengthen
-      value: 0.39976
-      objectReference: {fileID: 0}
-    - target: {fileID: 4647597015624199185, guid: 168db0e3e15880d4cbea8de4699d3042,
+    - target: {fileID: 5058929197294664029, guid: 168db0e3e15880d4cbea8de4699d3042,
         type: 3}
-      propertyPath: m_IsActive
-      value: 1
+      propertyPath: m_TagString
+      value: Untagged
+      objectReference: {fileID: 0}
+    - target: {fileID: 5058929197294953661, guid: 168db0e3e15880d4cbea8de4699d3042,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: -1
       objectReference: {fileID: 0}
     - target: {fileID: 7418641335067498741, guid: 168db0e3e15880d4cbea8de4699d3042,
         type: 3}
       propertyPath: m_HandBlockInput
       value: 
       objectReference: {fileID: 320083732}
-    - target: {fileID: 7418641335067498741, guid: 168db0e3e15880d4cbea8de4699d3042,
-        type: 3}
-      propertyPath: RaycastMaxDistance
-      value: 3
-      objectReference: {fileID: 0}
     - target: {fileID: 7418641335067498741, guid: 168db0e3e15880d4cbea8de4699d3042,
         type: 3}
       propertyPath: m_CurrentHandBlockText
@@ -3244,16 +3306,6 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Name
       value: Player
-      objectReference: {fileID: 0}
-    - target: {fileID: 8174688378270880554, guid: 168db0e3e15880d4cbea8de4699d3042,
-        type: 3}
-      propertyPath: m_IsActive
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8174688378271174408, guid: 168db0e3e15880d4cbea8de4699d3042,
-        type: 3}
-      propertyPath: m_RootOrder
-      value: 8
       objectReference: {fileID: 0}
     - target: {fileID: 8174688378271174408, guid: 168db0e3e15880d4cbea8de4699d3042,
         type: 3}
@@ -3306,8 +3358,7 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects:
-    - {fileID: 8174688378270880554, guid: 168db0e3e15880d4cbea8de4699d3042, type: 3}
+    m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 168db0e3e15880d4cbea8de4699d3042, type: 3}
@@ -3336,3 +3387,4 @@ SceneRoots:
   - {fileID: 514173234}
   - {fileID: 1743795463}
   - {fileID: 1978130908}
+  - {fileID: 1723804281}

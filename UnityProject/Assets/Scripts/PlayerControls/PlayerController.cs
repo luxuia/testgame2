@@ -1,3 +1,4 @@
+using Minecraft.Combat;
 using Minecraft.Entities;
 using Minecraft.PlayerControls;
 using Minecraft.Rendering;
@@ -28,14 +29,21 @@ namespace Minecraft.PlayerControls
         [System.NonSerialized] private TargetSelector m_TargetSelector;
         [System.NonSerialized] private PathfindingMovementController m_MovementController;
         [System.NonSerialized] private Camera m_Camera;
+        [System.NonSerialized] private FighterAnimatorDriver m_FighterAnimator;
+        [System.NonSerialized] private CombatRuntimeConfig m_CombatConfig;
+        [System.NonSerialized] private CombatActionPipeline m_CombatPipeline;
+        [System.NonSerialized] private CombatSkillDefinition m_DigAttackPrimarySkill;
+        [System.NonSerialized] private CombatSkillDefinition m_DigAttackAlternateSkill;
+        [System.NonSerialized] private CombatSkillDefinition m_DigFinishSkill;
 
         [System.NonSerialized] private float m_LastAttackTime;
         [System.NonSerialized] private bool m_IsAttacking;
+        [System.NonSerialized] private bool m_AlternateAttack;
         [System.NonSerialized] private float m_DiggingDamage;
         [System.NonSerialized] private Vector3Int m_CurrentDiggingTarget;
 
         public bool IsMoving => m_MovementController != null && m_MovementController.IsMoving;
-        public bool HasTarget => m_TargetSelector != null && m_TargetSelector.SelectedTargetBlock.HasValue;
+        public bool HasTarget => m_TargetSelector != null && m_TargetSelector.SelectionCount > 0;
         public Vector3Int? TargetPosition => m_TargetSelector?.StandPosition;
         public Vector3Int? TargetBlock => m_TargetSelector?.SelectedTargetBlock;
         public bool HasDirection => m_MovementController != null && m_MovementController.HasDirection;
@@ -60,6 +68,16 @@ namespace Minecraft.PlayerControls
 
             m_TargetSelector.Initialize(camera, playerEntity);
             m_MovementController.Initialize(playerEntity);
+            if (playerEntity is PlayerEntity player)
+            {
+                m_FighterAnimator = player.GetComponent<FighterAnimatorDriver>();
+                if (m_FighterAnimator == null)
+                {
+                    m_FighterAnimator = player.GetComponentInChildren<FighterAnimatorDriver>();
+                }
+            }
+
+            InitializeCombatAnimationMapping();
 
             m_TargetSelector.OnTargetSelectedEvent += OnTargetSelected;
             m_TargetSelector.OnTargetClearedEvent += OnTargetCleared;
@@ -69,12 +87,18 @@ namespace Minecraft.PlayerControls
 
             m_LastAttackTime = -999f;
             m_IsAttacking = false;
+            m_AlternateAttack = false;
             m_DiggingDamage = 0;
             m_CurrentDiggingTarget = Vector3Int.down;
         }
 
         private void OnTargetSelected(Vector3Int target)
         {
+            if (m_TargetSelector == null || !m_TargetSelector.IsMineSelection)
+            {
+                return;
+            }
+
             Vector3Int attackBlock = m_TargetSelector.SelectedTargetBlock ?? target;
             m_MovementController.SetTarget(target, attackBlock);
         }
@@ -100,7 +124,9 @@ namespace Minecraft.PlayerControls
 
         private void UpdateAttack()
         {
-            if (!m_TargetSelector.SelectedTargetBlock.HasValue)
+            if (m_TargetSelector.SelectionCount <= 0 ||
+                !m_TargetSelector.SelectedTargetBlock.HasValue ||
+                !m_TargetSelector.IsMineSelection)
             {
                 ShaderUtility.DigProgress = 0;
                 ShaderUtility.TargetedBlockPosition = Vector3.down;
@@ -109,6 +135,19 @@ namespace Minecraft.PlayerControls
 
             Vector3Int targetBlockPos = m_TargetSelector.SelectedTargetBlock.Value;
             ShaderUtility.TargetedBlockPosition = targetBlockPos;
+
+            if (m_TargetSelector.IsMultiSelection)
+            {
+                if (m_MovementController.IsMoving)
+                {
+                    m_MovementController.StopMovement();
+                }
+
+                ShaderUtility.DigProgress = 0;
+                m_DiggingDamage = 0;
+                m_CurrentDiggingTarget = Vector3Int.down;
+                return;
+            }
 
             if (m_MovementController.IsInAttackRange(targetBlockPos))
             {
@@ -121,7 +160,8 @@ namespace Minecraft.PlayerControls
                 {
                     if (targetBlockPos == m_CurrentDiggingTarget)
                     {
-                        m_DiggingDamage += Time.deltaTime * 5;
+                        TryPlayDigAttackAnimation();
+                        m_DiggingDamage += Time.deltaTime * GetDiggingDps();
                         
                         IWorld world = m_PlayerEntity.World;
                         var block = world.RWAccessor.GetBlock(targetBlockPos.x, targetBlockPos.y, targetBlockPos.z);
@@ -133,6 +173,7 @@ namespace Minecraft.PlayerControls
 
                             if (m_DiggingDamage >= block.Hardness)
                             {
+                                TriggerSkillAnimation(m_DigFinishSkill, "HeavySmash");
                                 world.RWAccessor.SetBlock(targetBlockPos.x, targetBlockPos.y, targetBlockPos.z, world.BlockDataTable.GetBlock(0), Quaternion.identity, ModificationSource.PlayerAction);
                                 
                                 ShaderUtility.DigProgress = 0;
@@ -153,6 +194,101 @@ namespace Minecraft.PlayerControls
             {
                 m_DiggingDamage = 0;
                 m_CurrentDiggingTarget = Vector3Int.down;
+            }
+        }
+
+        private float GetDiggingDps()
+        {
+            if (m_PlayerEntity is PlayerEntity player && player.CombatRuntime != null)
+            {
+                return Mathf.Max(1f, player.CombatRuntime.AttackPower);
+            }
+
+            return Mathf.Max(1f, AttackDamage);
+        }
+
+        private void TryPlayDigAttackAnimation()
+        {
+            if (m_FighterAnimator == null)
+            {
+                return;
+            }
+
+            if (Time.time - m_LastAttackTime < Mathf.Max(0.02f, AttackCooldown))
+            {
+                return;
+            }
+
+            m_LastAttackTime = Time.time;
+            m_IsAttacking = true;
+            CombatSkillDefinition skill = m_AlternateAttack
+                ? m_DigAttackAlternateSkill
+                : m_DigAttackPrimarySkill;
+            m_AlternateAttack = !m_AlternateAttack;
+            TriggerSkillAnimation(skill, "Punch");
+        }
+
+        private void InitializeCombatAnimationMapping()
+        {
+            m_CombatConfig = new CombatRuntimeConfig();
+            m_CombatPipeline = new CombatActionPipeline(m_CombatConfig);
+            m_DigAttackPrimarySkill = CreateAnimationOnlySkill("skill.player.dig.primary", "Punch");
+            m_DigAttackAlternateSkill = CreateAnimationOnlySkill("skill.player.dig.alternate", "Jab");
+            m_DigFinishSkill = CreateAnimationOnlySkill("skill.player.dig.finish", "HeavySmash");
+        }
+
+        private static CombatSkillDefinition CreateAnimationOnlySkill(string skillId, string animationActionName)
+        {
+            return new CombatSkillDefinition
+            {
+                SkillId = skillId,
+                TriggerType = CombatSkillTriggerType.Manual,
+                TargetingType = CombatSkillTargetingType.Entity,
+                AnimationActionName = animationActionName,
+            };
+        }
+
+        private void TriggerSkillAnimation(CombatSkillDefinition skill, string fallbackActionName)
+        {
+            if (m_FighterAnimator == null || m_CombatPipeline == null || skill == null)
+            {
+                if (m_FighterAnimator != null && !string.IsNullOrWhiteSpace(fallbackActionName))
+                {
+                    m_FighterAnimator.PlayActionByName(fallbackActionName);
+                }
+                return;
+            }
+
+            CombatEntityRuntime actor = null;
+            if (m_PlayerEntity is PlayerEntity player)
+            {
+                actor = player.CombatRuntime;
+            }
+
+            if (actor == null)
+            {
+                m_FighterAnimator.PlayActionByName(fallbackActionName);
+                return;
+            }
+
+            CombatActionRequest request = new CombatActionRequest
+            {
+                ActionKind = CombatActionKind.Skill,
+                Context = new CombatContext { TerritoryKind = CombatTerritoryKind.Home },
+                Actor = actor,
+                TargetEntity = null,
+                Skill = skill,
+                PreferredAnimationActionName = fallbackActionName,
+                TriggeredByAI = false,
+            };
+
+            CombatActionResult result = m_CombatPipeline.Execute(in request);
+            string actionName = !string.IsNullOrWhiteSpace(result.AnimationActionName)
+                ? result.AnimationActionName
+                : fallbackActionName;
+            if (!string.IsNullOrWhiteSpace(actionName))
+            {
+                m_FighterAnimator.PlayActionByName(actionName);
             }
         }
 

@@ -135,8 +135,13 @@ namespace Minecraft
 
         IEnumerator EnablePlayer()
         {
-            yield return new WaitForSeconds(5);
-            GameObject.FindGameObjectWithTag("Player").GetComponent<Minecraft.Entities.PlayerEntity>().enabled = true;
+            while (true) {
+                yield return new WaitForSeconds(5);
+                if (GameObject.FindGameObjectWithTag("Player")) {
+                    GameObject.FindGameObjectWithTag("Player").GetComponent<Minecraft.Entities.PlayerEntity>().enabled = true;
+                }
+                Debug.Log("EnablePlayer");
+            }
         }
 
         public override void LightBlock(int x, int y, int z, ModificationSource source)

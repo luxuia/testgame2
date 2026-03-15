@@ -15,6 +15,26 @@ int _DigProgress;
 // 当前玩家准心瞄准的方块的世界坐标
 float3 _TargetBlockPosition;
 
+// 菌毯叠加贴图（独立于方块主贴图）
+TEXTURE2D(_FungalOverlayTex); SAMPLER(sampler_FungalOverlayTex);
+
+// 菌毯状态贴图（R 通道编码状态）
+TEXTURE2D(_FungalStateMap); SAMPLER(sampler_FungalStateMap);
+
+// 菌毯状态贴图左下角对应的世界格坐标（XZ）
+float2 _FungalMapOriginXZ;
+
+// 菌毯状态贴图的边长（正方形）
+float _FungalMapSize;
+
+// 菌毯叠加强度
+float _FungalOverlayStrength;
+
+// 菌毯状态色
+half4 _FungalStateColorInfecting;
+half4 _FungalStateColorDamaged;
+half4 _FungalStateColorCompleted;
+
 // 渲染距离，以方块为单位
 int _RenderDistance;
 

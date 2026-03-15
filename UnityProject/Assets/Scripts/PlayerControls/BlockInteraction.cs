@@ -50,6 +50,19 @@ namespace Minecraft.PlayerControls
         [NonSerialized] private LineRenderer m_RayLineRenderer;
         [NonSerialized] private GameObject m_HitMarkerObject;
 
+        public string CurrentHandBlockInternalName
+        {
+            get
+            {
+                if (m_CurrentHandBlockText == null || string.IsNullOrWhiteSpace(m_CurrentHandBlockText.text))
+                {
+                    return string.Empty;
+                }
+
+                return m_CurrentHandBlockText.text.Trim();
+            }
+        }
+
         public void Initialize(Camera camera, IAABBEntity playerEntity)
         {
             m_Camera = camera;
@@ -332,6 +345,33 @@ namespace Minecraft.PlayerControls
         private bool PlaceRaycastSelect(BlockData block)
         {
             return !block.HasFlag(BlockFlags.IgnorePlaceBlockRaycast) && block.PhysicState == PhysicState.Solid;
+        }
+
+        public bool TryGetCurrentHandBlockData(IWorld world, out BlockData block)
+        {
+            block = null;
+            if (world?.BlockDataTable == null)
+            {
+                return false;
+            }
+
+            string internalName = CurrentHandBlockInternalName;
+            if (string.IsNullOrEmpty(internalName))
+            {
+                return false;
+            }
+
+            try
+            {
+                block = world.BlockDataTable.GetBlock(internalName);
+            }
+            catch
+            {
+                block = null;
+                return false;
+            }
+
+            return block != null && block.ID != 0;
         }
 
         private Ray GetRay()

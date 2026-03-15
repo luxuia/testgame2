@@ -136,6 +136,9 @@ namespace Minecraft
             m_Initialized = true;
             Active = this;
 
+            // Ensure fungal overlay/state runtime is always available in playable scenes.
+            FungalCarpetSystem.EnsureExists(transform);
+
             LuaManager.ExecuteLuaScripts();
             BlockDataTable.LoadBlockBehavioursInLua(this);
         }

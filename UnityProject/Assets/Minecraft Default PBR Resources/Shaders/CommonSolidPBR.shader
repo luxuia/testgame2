@@ -102,6 +102,7 @@
 
 				half4 col = BlockFragmentPBR(data, albedo.a);
 				HighlightBlock(input.blockPositionWS, input.uv, _HighlightColor, col);
+				ApplyFungalOverlay(input.blockPositionWS, normalWS, input.uv, col);
 				clip(col.a - _AlphaCutoff);
 				return col;
 			}

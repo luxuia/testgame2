@@ -1,4 +1,5 @@
 using Minecraft.Configurations;
+using Minecraft.Combat;
 using Minecraft.PlayerControls;
 using System;
 using UnityEngine;
@@ -29,11 +30,19 @@ namespace Minecraft.Entities
         [SerializeField] [Range(0, 1)] private float m_RunstepLengthen;
 
         [Space]
+        [Header("Combat Runtime")]
+        [SerializeField] [Min(1f)] private float m_CombatMaxHealth = 100f;
+        [SerializeField] [Min(0f)] private float m_CombatInitialHealth = 100f;
+        [SerializeField] [Min(0f)] private float m_CombatAttackPower = 10f;
+        [SerializeField] [Min(0f)] private float m_CombatDefense = 2f;
+
+        [Space]
 
         [SerializeField] private FirstPersonLook m_FirstPersonLook;
         [SerializeField] private FOVKick m_FOVKick;
         [SerializeField] private CurveControlledBob m_HeadBob;
         [SerializeField] private LerpControlledBob m_JumpBob;
+        [SerializeField] private FighterAnimatorDriver m_FighterAnimator;
 
         [Space]
         [Header("Events")]
@@ -58,10 +67,17 @@ namespace Minecraft.Entities
         private bool m_FlyDown;
         private bool m_IsRunning;
         private bool m_PreviouslyGrounded;
+        private bool m_JumpConsumedWhileGrounded;
+        private bool m_WasGroundedForAnimation;
         private float m_StepCycle;
         private float m_NextStep;
 
         private float m_LastTimePressW;
+        private Vector3Int m_LastFungalFootprint;
+        private float m_NextFungalFootprintTime;
+        [NonSerialized] private CombatEntityRuntime m_CombatRuntime;
+
+        public CombatEntityRuntime CombatRuntime => m_CombatRuntime;
 
 
         protected override void Start()
@@ -91,9 +107,12 @@ namespace Minecraft.Entities
             m_NextStep = m_StepCycle * 0.5f;
 
             m_LastTimePressW = 0f;
+            m_LastFungalFootprint = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
+            m_NextFungalFootprintTime = 0f;
 
             // m_RunAction.performed += SwitchRunMode;
             m_JumpAction.performed += SwitchJumpMode;
+            m_JumpAction.canceled += SwitchJumpMode;
             m_FlyAction.performed += SwitchFlyMode;
             m_FlyDownAction.performed += SwitchFlyDownMode;
             m_CursorStateAction.performed += SwitchCursorState;
@@ -104,6 +123,10 @@ namespace Minecraft.Entities
 
             m_PlayerController.Initialize(m_Camera, this);
             m_PlayerController.enabled = true;
+
+            InitializeCombatRuntimeIfNeeded();
+            ResolveFighterAnimatorIfNeeded();
+            m_WasGroundedForAnimation = true;
         }
 
         private void SwitchJumpMode(InputAction.CallbackContext context)
@@ -134,6 +157,8 @@ namespace Minecraft.Entities
 
         private void Update()
         {
+            SyncCombatRuntimePosition();
+
             // 在 Update 里读取输入。
             // 如果在 FixedUpdate 里读输入会出现丢失，
             // 因为 FixedUpdate 不是按实际帧率执行
@@ -142,6 +167,7 @@ namespace Minecraft.Entities
             m_FirstPersonLook.LookRotation(m_LookAction.ReadValue<Vector2>(), Time.deltaTime);
 
             bool isGrounded = GetIsGrounded(out BlockData groundBlock);
+            UpdateFighterAnimator(Velocity, isGrounded);
 
             if (!m_PreviouslyGrounded && isGrounded)
             {
@@ -158,6 +184,7 @@ namespace Minecraft.Entities
         {
             float speed = GetInput(out Vector2 input);
             m_FluidInteractor.UpdateState(this, m_CameraTransform, out float vMultiplier);
+            bool groundedForAnimation = true;
 
             bool hasPlayerInput = input != Vector2.zero;
 
@@ -208,11 +235,21 @@ namespace Minecraft.Entities
                 velocity.y = Velocity.y;
 
                 bool isGrounded = GetIsGrounded(out BlockData groundBlock);
+                groundedForAnimation = isGrounded;
 
-                if (isGrounded && m_Jump)
+                if (!m_Jump)
+                {
+                    m_JumpConsumedWhileGrounded = false;
+                }
+
+                if (isGrounded && m_Jump && !m_JumpConsumedWhileGrounded)
                 {
                     AddInstantForce(new Vector3(0, JumpHeight * Mass / Time.fixedDeltaTime, 0));
                     PlayBlockStepSound(groundBlock);
+                    m_FighterAnimator?.PlayAction(Velocity.sqrMagnitude > 0.2f
+                        ? FighterAnimationAction.JumpForward
+                        : FighterAnimationAction.Jump);
+                    m_JumpConsumedWhileGrounded = true;
                 }
 
                 ProgressStepCycle(input, speed, isGrounded, groundBlock);
@@ -233,6 +270,9 @@ namespace Minecraft.Entities
             AddInstantForce((velocity - Velocity) * Mass / Time.fixedDeltaTime);
 
             base.FixedUpdate();
+            bool groundedAfterMove = UseGravity ? GetIsGrounded(out _) : true;
+            UpdateFighterAnimator(Velocity, groundedAfterMove);
+            TrySpreadFungalCarpet(velocity);
         }
 
         private void ProgressStepCycle(Vector2 input, float speed, bool isGrounded, BlockData blockUnderFeet)
@@ -314,6 +354,149 @@ namespace Minecraft.Entities
         private void PlayBlockStepSound(BlockData block)
         {
             //block.PlayStepAutio(m_AudioSource);
+        }
+
+        private void TrySpreadFungalCarpet(Vector3 desiredVelocity)
+        {
+            if (Time.time < m_NextFungalFootprintTime)
+            {
+                return;
+            }
+
+            Vector2 planar = new Vector2(desiredVelocity.x, desiredVelocity.z);
+            if (planar.sqrMagnitude < 0.01f)
+            {
+                return;
+            }
+
+            int x = Mathf.FloorToInt(Position.x);
+            int z = Mathf.FloorToInt(Position.z);
+            if (x == m_LastFungalFootprint.x && z == m_LastFungalFootprint.z)
+            {
+                return;
+            }
+
+            if (!Minecraft.FungalCarpetSystem.TryInfectAtWorldPosition(Position))
+            {
+                return;
+            }
+
+            m_LastFungalFootprint = new Vector3Int(x, 0, z);
+            m_NextFungalFootprintTime = Time.time + 0.08f;
+        }
+
+        public float ApplyCombatDamage(float amount)
+        {
+            InitializeCombatRuntimeIfNeeded();
+            float before = m_CombatRuntime.CurrentHealth;
+            float applied = m_CombatRuntime.ApplyDamage(amount);
+            if (applied > 0f && m_FighterAnimator != null)
+            {
+                if (before > 0f && m_CombatRuntime.CurrentHealth <= 0f)
+                {
+                    m_FighterAnimator.PlayAction(FighterAnimationAction.Death);
+                }
+                else
+                {
+                    m_FighterAnimator.PlayAction(FighterAnimationAction.LightHit);
+                }
+            }
+
+            return applied;
+        }
+
+        public float HealCombat(float amount)
+        {
+            InitializeCombatRuntimeIfNeeded();
+            float before = m_CombatRuntime.CurrentHealth;
+            float healed = m_CombatRuntime.Heal(amount);
+            if (healed > 0f && before <= 0f && m_CombatRuntime.CurrentHealth > 0f)
+            {
+                m_FighterAnimator?.PlayAction(FighterAnimationAction.Revive);
+            }
+
+            return healed;
+        }
+
+        private void InitializeCombatRuntimeIfNeeded()
+        {
+            if (m_CombatRuntime != null)
+            {
+                return;
+            }
+
+            float maxHealth = Mathf.Max(1f, m_CombatMaxHealth);
+            float initialHealth = Mathf.Clamp(m_CombatInitialHealth, 0f, maxHealth);
+
+            m_CombatRuntime = new CombatEntityRuntime
+            {
+                RuntimeId = GetInstanceID(),
+                Role = CombatActorRole.Player,
+                DisplayName = gameObject.name,
+                MaxHealth = maxHealth,
+                CurrentHealth = initialHealth,
+                AttackPower = Mathf.Max(0f, m_CombatAttackPower),
+                Defense = Mathf.Max(0f, m_CombatDefense),
+                Position = Position,
+            };
+        }
+
+        private void SyncCombatRuntimePosition()
+        {
+            if (m_CombatRuntime == null)
+            {
+                return;
+            }
+
+            m_CombatRuntime.Position = Position;
+        }
+
+        private void ResolveFighterAnimatorIfNeeded()
+        {
+            if (m_FighterAnimator == null)
+            {
+                m_FighterAnimator = GetComponent<FighterAnimatorDriver>();
+            }
+
+            if (m_FighterAnimator == null)
+            {
+                m_FighterAnimator = GetComponentInChildren<FighterAnimatorDriver>();
+            }
+
+            if (m_FighterAnimator == null)
+            {
+                Animator foundAnimator = GetComponentInChildren<Animator>();
+                if (foundAnimator != null)
+                {
+                    m_FighterAnimator = foundAnimator.GetComponent<FighterAnimatorDriver>();
+                    if (m_FighterAnimator == null)
+                    {
+                        m_FighterAnimator = foundAnimator.gameObject.AddComponent<FighterAnimatorDriver>();
+                    }
+                }
+            }
+
+            m_FighterAnimator?.TryInitialize();
+        }
+
+        private void UpdateFighterAnimator(Vector3 worldVelocity, bool isGrounded)
+        {
+            if (m_FighterAnimator == null)
+            {
+                return;
+            }
+
+            m_FighterAnimator.UpdateLocomotion(worldVelocity, m_CameraTransform, m_IsRunning);
+            m_FighterAnimator.SetGroundedState(isGrounded || !UseGravity);
+
+            if (m_WasGroundedForAnimation && !isGrounded && worldVelocity.y > 0.25f)
+            {
+                m_FighterAnimator.PlayAction(worldVelocity.sqrMagnitude > 0.2f
+                    ? FighterAnimationAction.JumpForward
+                    : FighterAnimationAction.Jump);
+            }
+
+            m_WasGroundedForAnimation = isGrounded;
         }
     }
 }

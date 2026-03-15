@@ -165,6 +165,10 @@ namespace Minecraft.Pathfinding
         [Tooltip("每个活跃代理分配的场流节点预算（自适应时使用）")]
         public int NodesPerActiveAgent = 600;
 
+        [Header("Mining Jobs")]
+        [Tooltip("启动时自动挂载 AgentMiningJobManager（不存在时）")]
+        public bool AutoAttachMiningJobManager = true;
+
         [System.NonSerialized] private IWorld m_World;
         [System.NonSerialized] private bool m_HasSpawned;
         [System.NonSerialized] private int m_SpawnedCount;
@@ -219,6 +223,7 @@ namespace Minecraft.Pathfinding
             TryAcquireWorld();
             TrySpawnAgents();
             RefreshAgentsIfNeeded();
+            EnsureMiningJobManager();
         }
 
         private void OnEnable()
@@ -231,6 +236,26 @@ namespace Minecraft.Pathfinding
             m_PreparedTargetByRequestedTarget.Clear();
             m_NextPrepareCheckTimeByRequestedTarget.Clear();
             m_LastRequestedTargetUseTime.Clear();
+            EnsureMiningJobManager();
+        }
+
+        private void EnsureMiningJobManager()
+        {
+            if (!AutoAttachMiningJobManager)
+            {
+                return;
+            }
+
+            AgentMiningJobManager manager = GetComponent<AgentMiningJobManager>();
+            if (manager == null)
+            {
+                manager = gameObject.AddComponent<AgentMiningJobManager>();
+            }
+
+            if (manager.Coordinator == null)
+            {
+                manager.Coordinator = this;
+            }
         }
 
         private void OnTransformChildrenChanged()
@@ -417,6 +442,7 @@ namespace Minecraft.Pathfinding
                     runtime.CurrentPlanarVelocity = Vector2.zero;
                     runtime.DesiredPlanarVelocity = Vector2.zero;
                     m_AgentRuntimeStates[agent] = runtime;
+                    m_MoveAgentsBuffer.Add(agent);
                     continue;
                 }
 
@@ -445,7 +471,7 @@ namespace Minecraft.Pathfinding
                 }
 
                 Vector2 targetPlanarVelocity = runtime.DesiredPlanarVelocity;
-                if (EnableLocalAvoidance)
+                if (EnableLocalAvoidance && runtime.DesiredPlanarVelocity.sqrMagnitude > 0.0001f)
                 {
                     Vector2 avoidance = ComputeReciprocalAvoidance(agent, runtime);
                     float fadeDistance = Mathf.Max(agent.NodeReachDistance * 2f, AvoidanceFadeNearNodeDistance);

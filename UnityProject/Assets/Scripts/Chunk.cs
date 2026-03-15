@@ -153,6 +153,7 @@ namespace Minecraft
                 World.TickBlock(x, y, z);
                 World.LightBlock(x, y, z, source);
                 World.MarkBlockMeshDirty(x, y, z, source);
+                FungalCarpetSystem.NotifyBlockChanged(new Vector3Int(x, y, z));
                 return true;
             }
 

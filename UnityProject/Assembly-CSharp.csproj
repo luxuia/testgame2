@@ -23,7 +23,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>Temp\bin\Debug\</OutputPath>
-    <DefineConstants>UNITY_2022_3_14;UNITY_2022_3;UNITY_2022;UNITY_5_3_OR_NEWER;UNITY_5_4_OR_NEWER;UNITY_5_5_OR_NEWER;UNITY_5_6_OR_NEWER;UNITY_2017_1_OR_NEWER;UNITY_2017_2_OR_NEWER;UNITY_2017_3_OR_NEWER;UNITY_2017_4_OR_NEWER;UNITY_2018_1_OR_NEWER;UNITY_2018_2_OR_NEWER;UNITY_2018_3_OR_NEWER;UNITY_2018_4_OR_NEWER;UNITY_2019_1_OR_NEWER;UNITY_2019_2_OR_NEWER;UNITY_2019_3_OR_NEWER;UNITY_2019_4_OR_NEWER;UNITY_2020_1_OR_NEWER;UNITY_2020_2_OR_NEWER;UNITY_2020_3_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_2021_2_OR_NEWER;UNITY_2021_3_OR_NEWER;UNITY_2022_1_OR_NEWER;UNITY_2022_2_OR_NEWER;UNITY_2022_3_OR_NEWER;PLATFORM_ARCH_64;UNITY_64;UNITY_INCLUDE_TESTS;ENABLE_AR;ENABLE_AUDIO;ENABLE_CACHING;ENABLE_CLOTH;ENABLE_EVENT_QUEUE;ENABLE_MICROPHONE;ENABLE_MULTIPLE_DISPLAYS;ENABLE_PHYSICS;ENABLE_TEXTURE_STREAMING;ENABLE_VIRTUALTEXTURING;ENABLE_LZMA;ENABLE_UNITYEVENTS;ENABLE_VR;ENABLE_WEBCAM;ENABLE_UNITYWEBREQUEST;ENABLE_WWW;ENABLE_CLOUD_SERVICES;ENABLE_CLOUD_SERVICES_ADS;ENABLE_CLOUD_SERVICES_USE_WEBREQUEST;ENABLE_CLOUD_SERVICES_CRASH_REPORTING;ENABLE_CLOUD_SERVICES_PURCHASING;ENABLE_CLOUD_SERVICES_ANALYTICS;ENABLE_CLOUD_SERVICES_BUILD;ENABLE_EDITOR_GAME_SERVICES;ENABLE_UNITY_GAME_SERVICES_ANALYTICS_SUPPORT;ENABLE_CLOUD_LICENSE;ENABLE_EDITOR_HUB_LICENSE;ENABLE_WEBSOCKET_CLIENT;ENABLE_GENERATE_NATIVE_PLUGINS_FOR_ASSEMBLIES_API;ENABLE_DIRECTOR_AUDIO;ENABLE_DIRECTOR_TEXTURE;ENABLE_MANAGED_JOBS;ENABLE_MANAGED_TRANSFORM_JOBS;ENABLE_MANAGED_ANIMATION_JOBS;ENABLE_MANAGED_AUDIO_JOBS;ENABLE_MANAGED_UNITYTLS;INCLUDE_DYNAMIC_GI;ENABLE_SCRIPTING_GC_WBARRIERS;PLATFORM_SUPPORTS_MONO;RENDER_SOFTWARE_CURSOR;ENABLE_VIDEO;ENABLE_ACCELERATOR_CLIENT_DEBUGGING;ENABLE_NAVIGATION_PACKAGE_DEBUG_VISUALIZATION;ENABLE_NAVIGATION_HEIGHTMESH_RUNTIME_SUPPORT;ENABLE_NAVIGATION_UI_REQUIRES_PACKAGE;PLATFORM_STANDALONE;TEXTCORE_1_0_OR_NEWER;PLATFORM_STANDALONE_WIN;UNITY_STANDALONE_WIN;UNITY_STANDALONE;UNITY_UGP_API;ENABLE_RUNTIME_GI;ENABLE_MOVIES;ENABLE_NETWORK;ENABLE_NVIDIA;ENABLE_CRUNCH_TEXTURE_COMPRESSION;ENABLE_OUT_OF_PROCESS_CRASH_HANDLER;ENABLE_CLUSTER_SYNC;ENABLE_CLUSTERINPUT;PLATFORM_UPDATES_TIME_OUTSIDE_OF_PLAYER_LOOP;GFXDEVICE_WAITFOREVENT_MESSAGEPUMP;PLATFORM_INITIALIZES_MEMORY_MANAGER_EXPLICITLY;ENABLE_MONO;NET_4_6;NET_UNITY_4_8;ENABLE_PROFILER;DEBUG;TRACE;UNITY_ASSERTIONS;UNITY_EDITOR;UNITY_EDITOR_64;UNITY_EDITOR_WIN;ENABLE_UNITY_COLLECTIONS_CHECKS;ENABLE_BURST_AOT;UNITY_TEAM_LICENSE;ENABLE_CUSTOM_RENDER_TEXTURE;ENABLE_DIRECTOR;ENABLE_LOCALIZATION;ENABLE_SPRITES;ENABLE_TERRAIN;ENABLE_TILEMAP;ENABLE_TIMELINE;ENABLE_INPUT_SYSTEM;ENABLE_LEGACY_INPUT_MANAGER;TEXTCORE_FONT_ENGINE_1_5_OR_NEWER;UNITY_POST_PROCESSING_STACK_V2;HOTFIX_ENABLE;LOAD_ASSET_BUNDLE_FROM_FILE;CSHARP_7_OR_LATER;CSHARP_7_3_OR_NEWER</DefineConstants>
+    <DefineConstants>UNITY_2022_3_14;UNITY_2022_3;UNITY_2022;UNITY_5_3_OR_NEWER;UNITY_5_4_OR_NEWER;UNITY_5_5_OR_NEWER;UNITY_5_6_OR_NEWER;UNITY_2017_1_OR_NEWER;UNITY_2017_2_OR_NEWER;UNITY_2017_3_OR_NEWER;UNITY_2017_4_OR_NEWER;UNITY_2018_1_OR_NEWER;UNITY_2018_2_OR_NEWER;UNITY_2018_3_OR_NEWER;UNITY_2018_4_OR_NEWER;UNITY_2019_1_OR_NEWER;UNITY_2019_2_OR_NEWER;UNITY_2019_3_OR_NEWER;UNITY_2019_4_OR_NEWER;UNITY_2020_1_OR_NEWER;UNITY_2020_2_OR_NEWER;UNITY_2020_3_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_2021_2_OR_NEWER;UNITY_2021_3_OR_NEWER;UNITY_2022_1_OR_NEWER;UNITY_2022_2_OR_NEWER;UNITY_2022_3_OR_NEWER;PLATFORM_ARCH_64;UNITY_64;UNITY_INCLUDE_TESTS;ENABLE_AR;ENABLE_AUDIO;ENABLE_CACHING;ENABLE_CLOTH;ENABLE_EVENT_QUEUE;ENABLE_MICROPHONE;ENABLE_MULTIPLE_DISPLAYS;ENABLE_PHYSICS;ENABLE_TEXTURE_STREAMING;ENABLE_VIRTUALTEXTURING;ENABLE_LZMA;ENABLE_UNITYEVENTS;ENABLE_VR;ENABLE_WEBCAM;ENABLE_UNITYWEBREQUEST;ENABLE_WWW;ENABLE_CLOUD_SERVICES;ENABLE_CLOUD_SERVICES_ADS;ENABLE_CLOUD_SERVICES_USE_WEBREQUEST;ENABLE_CLOUD_SERVICES_CRASH_REPORTING;ENABLE_CLOUD_SERVICES_PURCHASING;ENABLE_CLOUD_SERVICES_ANALYTICS;ENABLE_CLOUD_SERVICES_BUILD;ENABLE_EDITOR_GAME_SERVICES;ENABLE_UNITY_GAME_SERVICES_ANALYTICS_SUPPORT;ENABLE_CLOUD_LICENSE;ENABLE_EDITOR_HUB_LICENSE;ENABLE_WEBSOCKET_CLIENT;ENABLE_GENERATE_NATIVE_PLUGINS_FOR_ASSEMBLIES_API;ENABLE_DIRECTOR_AUDIO;ENABLE_DIRECTOR_TEXTURE;ENABLE_MANAGED_JOBS;ENABLE_MANAGED_TRANSFORM_JOBS;ENABLE_MANAGED_ANIMATION_JOBS;ENABLE_MANAGED_AUDIO_JOBS;ENABLE_MANAGED_UNITYTLS;INCLUDE_DYNAMIC_GI;ENABLE_SCRIPTING_GC_WBARRIERS;PLATFORM_SUPPORTS_MONO;RENDER_SOFTWARE_CURSOR;ENABLE_VIDEO;ENABLE_ACCELERATOR_CLIENT_DEBUGGING;ENABLE_NAVIGATION_PACKAGE_DEBUG_VISUALIZATION;ENABLE_NAVIGATION_HEIGHTMESH_RUNTIME_SUPPORT;ENABLE_NAVIGATION_UI_REQUIRES_PACKAGE;PLATFORM_STANDALONE;TEXTCORE_1_0_OR_NEWER;PLATFORM_STANDALONE_WIN;UNITY_STANDALONE_WIN;UNITY_STANDALONE;UNITY_UGP_API;ENABLE_RUNTIME_GI;ENABLE_MOVIES;ENABLE_NETWORK;ENABLE_NVIDIA;ENABLE_CRUNCH_TEXTURE_COMPRESSION;ENABLE_OUT_OF_PROCESS_CRASH_HANDLER;ENABLE_CLUSTER_SYNC;ENABLE_CLUSTERINPUT;PLATFORM_UPDATES_TIME_OUTSIDE_OF_PLAYER_LOOP;GFXDEVICE_WAITFOREVENT_MESSAGEPUMP;PLATFORM_INITIALIZES_MEMORY_MANAGER_EXPLICITLY;ENABLE_MONO;NET_4_6;NET_UNITY_4_8;ENABLE_PROFILER;DEBUG;TRACE;UNITY_ASSERTIONS;UNITY_EDITOR;UNITY_EDITOR_64;UNITY_EDITOR_WIN;ENABLE_UNITY_COLLECTIONS_CHECKS;ENABLE_BURST_AOT;UNITY_TEAM_LICENSE;ENABLE_CUSTOM_RENDER_TEXTURE;ENABLE_DIRECTOR;ENABLE_LOCALIZATION;ENABLE_SPRITES;ENABLE_TERRAIN;ENABLE_TILEMAP;ENABLE_TIMELINE;ENABLE_INPUT_SYSTEM;ENABLE_LEGACY_INPUT_MANAGER;TEXTCORE_FONT_ENGINE_1_5_OR_NEWER;UNITY_POST_PROCESSING_STACK_V2;HOTFIX_ENABLE;CSHARP_7_OR_LATER;CSHARP_7_3_OR_NEWER</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <NoWarn>0169;USG0001</NoWarn>
@@ -68,6 +68,7 @@
     <Compile Include="Assets\Scripts\Assets\AssetManager.cs" />
     <Compile Include="Assets\Scripts\Assets\AsyncAsset.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\GenLayers\NativeInt2DArray.cs" />
+    <Compile Include="Assets\Fighter Pack Bundle\Male Fighter Mecanim Animation Pack\Code\CameraControl.cs" />
     <Compile Include="Assets\Scripts\Configurations\BlockData.cs" />
     <Compile Include="Assets\Scripts\Rendering\SectionMeshManager.cs" />
     <Compile Include="Assets\Scripts\PlayerControls\FOVKick.cs" />
@@ -90,6 +91,7 @@
     <Compile Include="Assets\Scripts\Assets\AssetPtr.cs" />
     <Compile Include="Assets\Scripts\Assets\AssetManagerUpdater.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\GenLayers\DefaultLayers\AddBeachLayer.cs" />
+    <Compile Include="Assets\Scripts\GoalPlanning\GoapRuntime.cs" />
     <Compile Include="Assets\Scripts\PhysicSystem\PhysicState.cs" />
     <Compile Include="Assets\Scripts\Entities\Entity.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\WorldGeneratePipeline.cs" />
@@ -118,10 +120,12 @@
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\CaveGenerator.cs" />
     <Compile Include="Assets\Scripts\PhysicSystem\PhysicMaterial.cs" />
     <Compile Include="Assets\XLua\Src\SignatureLoader.cs" />
+    <Compile Include="Assets\Fighter Pack Bundle\Male Fighter Mecanim Animation Pack\Code\FighterAnimationDemo.cs" />
     <Compile Include="Assets\Scripts\Collections\HashUtility.cs" />
     <Compile Include="Assets\Scripts\WorldUtility.cs" />
     <Compile Include="Assets\Scripts\Lua\ILuaCallCSharp.cs" />
     <Compile Include="Assets\XLua\Src\TypeExtensions.cs" />
+    <Compile Include="Assets\Scripts\CombatFramework.cs" />
     <Compile Include="Assets\Scripts\PlayerControls\CurveControlledBob.cs" />
     <Compile Include="Assets\Scripts\IWorldRWAccessor.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\GenerationHelper.cs" />
@@ -134,6 +138,7 @@
     <Compile Include="Assets\Scripts\Assets\AssetBundleInfo.cs" />
     <Compile Include="Assets\XLua\Src\MethodWarpsCache.cs" />
     <Compile Include="Assets\XLua\Src\ObjectPool.cs" />
+    <Compile Include="Assets\Scripts\CombatAIFramework.cs" />
     <Compile Include="Assets\Scripts\Configurations\BlockUtility.cs" />
     <Compile Include="Assets\Scripts\Assets\EditorAssetBundle.cs" />
     <Compile Include="Assets\Scripts\Configurations\BlockFaceCorner.cs" />
@@ -153,6 +158,7 @@
     <Compile Include="Assets\Scripts\Lua\IHotfixable.cs" />
     <Compile Include="Assets\XLua\Src\Utils.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\GenLayers\DefaultLayers\IslandLayer.cs" />
+    <Compile Include="Assets\Scripts\Pathfinding\AgentMiningJobManager.cs" />
     <Compile Include="Assets\Scripts\Configurations\BlockTable.cs" />
     <Compile Include="Assets\Scripts\PlayerControls\LerpControlledBob.cs" />
     <Compile Include="Assets\Scripts\IWorld.cs" />
@@ -193,6 +199,7 @@
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\StatelessGenerator.cs" />
     <Compile Include="Assets\Scripts\IWorldRAccessor.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\GenLayers\DefaultLayers\ZoomLayer.cs" />
+    <Compile Include="Assets\Scripts\Entities\FighterAnimatorDriver.cs" />
     <Compile Include="Assets\XLua\Src\CodeEmit.cs" />
     <Compile Include="Assets\Scripts\Configurations\BiomeId.cs" />
     <Compile Include="Assets\Scripts\Rendering\MeshBuilder.cs" />
@@ -204,6 +211,7 @@
     <Compile Include="Assets\Scripts\Utils\AOTUtils.cs" />
     <Compile Include="Assets\Scripts\Configurations\BiomeTable.cs" />
     <Compile Include="Assets\Scripts\Noises\GenericNoise.cs" />
+    <Compile Include="Assets\Scripts\FungalCarpetSystem.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\Minecraft Default PBR Resources\Shaders\Includes\Minecraft\BlockBRDF.hlsl" />
@@ -212,6 +220,7 @@
     <None Include="Assets\Minecraft Default PBR Resources\Shaders\Includes\Minecraft\Input.hlsl" />
     <None Include="Assets\Minecraft Default PBR Resources\Shaders\CommonFluidPBR.shader" />
     <None Include="Assets\Minecraft Default PBR Resources\Shaders\CommonFoliagePBR.shader" />
+    <None Include="Assets\Fighter Pack Bundle\_www.unityassetcollection.com.txt" />
     <None Include="Assets\Minecraft Default PBR Resources\Shaders\CommonSolidPBR.shader" />
     <None Include="Assets\Minecraft Default PBR Resources\Shaders\Includes\Minecraft\ShadowCaster.hlsl" />
     <None Include="Assets\Minecraft Default PBR Resources\Shaders\Includes\Minecraft\Core.hlsl" />
@@ -1141,6 +1150,10 @@
       <Project>{F1A54BBA-F081-8818-CA7F-07A41A3339A0}</Project>
       <Name>Unity.Recorder</Name>
     </ProjectReference>
+    <ProjectReference Include="MCPForUnity.Editor.csproj">
+      <Project>{6FC34C9B-03D1-6A5E-EA9B-E298D4C37524}</Project>
+      <Name>MCPForUnity.Editor</Name>
+    </ProjectReference>
     <ProjectReference Include="Unity.AI.Navigation.Editor.ConversionSystem.csproj">
       <Project>{0A49723B-5F84-6378-DBDB-ED7B0C8A9445}</Project>
       <Name>Unity.AI.Navigation.Editor.ConversionSystem</Name>
@@ -1160,6 +1173,10 @@
     <ProjectReference Include="Unity.RenderPipelines.ShaderGraph.ShaderGraphLibrary.csproj">
       <Project>{4789D9BD-09A4-897A-09B1-6B4D7856BE77}</Project>
       <Name>Unity.RenderPipelines.ShaderGraph.ShaderGraphLibrary</Name>
+    </ProjectReference>
+    <ProjectReference Include="MCPForUnity.Runtime.csproj">
+      <Project>{88AEE6C2-0D0C-E40D-C843-F9212A4AF8D5}</Project>
+      <Name>MCPForUnity.Runtime</Name>
     </ProjectReference>
     <ProjectReference Include="Unity.EditorCoroutines.Editor.csproj">
       <Project>{FBE70367-EB25-07E7-E92B-FC5E54217EBF}</Project>
