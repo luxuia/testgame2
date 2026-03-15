@@ -1,4 +1,4 @@
-﻿using Minecraft.Configurations;
+using Minecraft.Configurations;
 using Minecraft.PlayerControls;
 using System;
 using UnityEngine;
@@ -10,6 +10,7 @@ namespace Minecraft.Entities
     [DisallowMultipleComponent]
     [RequireComponent(typeof(BlockInteraction))]
     [RequireComponent(typeof(FluidInteractor))]
+    [RequireComponent(typeof(PlayerController))]
     public class PlayerEntity : Entity
     {
         // ...fields of entity class
@@ -50,6 +51,7 @@ namespace Minecraft.Entities
         private Camera m_Camera;
         private Transform m_CameraTransform;
         private FluidInteractor m_FluidInteractor;
+        private PlayerController m_PlayerController;
 
         private Vector3 m_OriginalCameraPosition;
         private bool m_Jump;
@@ -78,6 +80,7 @@ namespace Minecraft.Entities
             m_Camera = Camera.main;
             m_CameraTransform = m_Camera.GetComponent<Transform>();
             m_FluidInteractor = GetComponent<FluidInteractor>();
+            m_PlayerController = GetComponent<PlayerController>();
 
             m_FirstPersonLook.Initialize(m_Transform, m_CameraTransform, true);
             m_HeadBob.Initialize(m_CameraTransform);
@@ -98,6 +101,9 @@ namespace Minecraft.Entities
             BlockInteraction interaction = GetComponent<BlockInteraction>();
             interaction.Initialize(m_Camera, this);
             interaction.enabled = true;
+
+            m_PlayerController.Initialize(m_Camera, this);
+            m_PlayerController.enabled = true;
         }
 
         private void SwitchJumpMode(InputAction.CallbackContext context)
@@ -153,55 +159,80 @@ namespace Minecraft.Entities
             float speed = GetInput(out Vector2 input);
             m_FluidInteractor.UpdateState(this, m_CameraTransform, out float vMultiplier);
 
+            bool hasPlayerInput = input != Vector2.zero;
 
-            // always move along the camera forward as it is the direction that it being aimed at
-            Vector3 velocity = m_CameraTransform.forward * input.y + m_CameraTransform.right * input.x;
-            velocity = speed * vMultiplier * velocity.normalized;
-
-            if (input != Vector2.zero)
+            if (hasPlayerInput && m_PlayerController != null && m_PlayerController.IsMoving)
             {
-                Vector3 moveDir = m_CameraTransform.forward * input.y + m_CameraTransform.right * input.x;
-                moveDir.y = 0;
+                m_PlayerController.CancelCurrentAction();
+            }
+
+            Vector3 velocity;
+
+            if (m_PlayerController != null && m_PlayerController.IsMoving && m_PlayerController.HasDirection && !hasPlayerInput)
+            {
+                Vector3 moveDir = m_PlayerController.TargetDirection;
+                velocity = moveDir * speed * vMultiplier;
+                
                 if (moveDir.sqrMagnitude > 0.01f)
                 {
                     m_Transform.rotation = Quaternion.LookRotation(moveDir.normalized);
+                }
+
+                if (UseGravity && m_PlayerController.HasVerticalMovement)
+                {
+                    bool isGrounded = GetIsGrounded(out BlockData groundBlock);
+                    if (isGrounded)
+                    {
+                        AddInstantForce(new Vector3(0, JumpHeight * Mass / Time.fixedDeltaTime, 0));
+                    }
+                }
+            }
+            else
+            {
+                velocity = m_CameraTransform.forward * input.y + m_CameraTransform.right * input.x;
+                velocity = speed * vMultiplier * velocity.normalized;
+
+                if (input != Vector2.zero)
+                {
+                    Vector3 moveDir = m_CameraTransform.forward * input.y + m_CameraTransform.right * input.x;
+                    moveDir.y = 0;
+                    if (moveDir.sqrMagnitude > 0.01f)
+                    {
+                        m_Transform.rotation = Quaternion.LookRotation(moveDir.normalized);
+                    }
                 }
             }
 
             if (UseGravity)
             {
-                velocity.y = Velocity.y; // 不管 y 方向
+                velocity.y = Velocity.y;
 
                 bool isGrounded = GetIsGrounded(out BlockData groundBlock);
 
                 if (isGrounded && m_Jump)
                 {
-                    // 向上跳起
                     AddInstantForce(new Vector3(0, JumpHeight * Mass / Time.fixedDeltaTime, 0));
                     PlayBlockStepSound(groundBlock);
-                    // m_Jump = false;
                 }
 
                 ProgressStepCycle(input, speed, isGrounded, groundBlock);
-                //UpdateCameraPosition(speed, isGrounded);
             }
             else if (m_FlyDown)
             {
-                velocity.y = -FlyUpSpeed; // 向下飞
+                velocity.y = -FlyUpSpeed;
             }
             else if (m_Jump)
             {
-                velocity.y = FlyUpSpeed; // 向上飞
+                velocity.y = FlyUpSpeed;
             }
             else
             {
-                velocity.y = 0; // 停在空中
+                velocity.y = 0;
             }
 
-            // 施加力来调整速度
             AddInstantForce((velocity - Velocity) * Mass / Time.fixedDeltaTime);
 
-            base.FixedUpdate(); // move
+            base.FixedUpdate();
         }
 
         private void ProgressStepCycle(Vector2 input, float speed, bool isGrounded, BlockData blockUnderFeet)

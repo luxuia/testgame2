@@ -105,6 +105,7 @@
     <Compile Include="Assets\XLua\Src\LuaException.cs" />
     <Compile Include="Assets\Scripts\WorldConsts.cs" />
     <Compile Include="Assets\Scripts\Assets\EnsureAssetTypeAttribute.cs" />
+    <Compile Include="Assets\Scripts\PlayerControls\PathfindingMovementController.cs" />
     <Compile Include="Assets\Scripts\Configurations\IOrderedConfigData.cs" />
     <Compile Include="Assets\Scripts\Utils\ArrayUtility.cs" />
     <Compile Include="Assets\Scripts\Collections\LRULinkedMap.cs" />
@@ -112,6 +113,7 @@
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\GenLayers\DefaultLayers\AddIslandLayer.cs" />
     <Compile Include="Assets\Scripts\Entities\LuaBlockEntity.cs" />
     <Compile Include="Assets\Scripts\Configurations\IBlockBehaviour.cs" />
+    <Compile Include="Assets\Scripts\Pathfinding\AStarPathfinding.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\CaveGenerator.cs" />
     <Compile Include="Assets\Scripts\PhysicSystem\PhysicMaterial.cs" />
     <Compile Include="Assets\XLua\Src\SignatureLoader.cs" />
@@ -137,6 +139,7 @@
     <Compile Include="Assets\XLua\Src\RawObject.cs" />
     <Compile Include="Assets\Scripts\ModificationSource.cs" />
     <Compile Include="Assets\Scripts\MathUtility.cs" />
+    <Compile Include="Assets\Scripts\PlayerControls\TargetSelector.cs" />
     <Compile Include="Assets\Scripts\WorldSinglePlayer.cs" />
     <Compile Include="Assets\XLua\Src\GenericDelegateBridge.cs" />
     <Compile Include="Assets\Scripts\Configurations\BlockMesh.cs" />
@@ -155,6 +158,7 @@
     <Compile Include="Assets\Scripts\Assets\AssetCatalog.cs" />
     <Compile Include="Assets\XLua\Src\StaticLuaCallbacks.cs" />
     <Compile Include="Assets\Scripts\Configurations\BlockVertexData.cs" />
+    <Compile Include="Assets\Scripts\PlayerControls\PlayerController.cs" />
     <Compile Include="Assets\Scripts\PhysicSystem\Physics.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\TreeGenerator.cs" />
     <Compile Include="Assets\Scripts\Lua\ICSharpCallLua.cs" />

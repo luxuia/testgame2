@@ -13,8 +13,18 @@ namespace Minecraft.PlayerControls
     [DisallowMultipleComponent]
     public class BlockInteraction : MonoBehaviour, ILuaCallCSharp
     {
-        [Range(3, 12)] public float RaycastMaxDistance = 8;
+        [Range(3, 12)] public float RaycastMaxDistance = 2;
         [Min(0.1f)] public float MaxClickSpacing = 0.4f;
+
+        [Header("调试设置")]
+        [Tooltip("是否显示调试射线")]
+        public bool ShowDebugRay = true;
+        [Tooltip("射线颜色（未命中）")]
+        public Color RayColor = Color.green;
+        [Tooltip("射线颜色（命中）")]
+        public Color HitColor = Color.red;
+        [Tooltip("射线宽度")]
+        public float RayWidth = 0.02f;
 
         [SerializeField] private Text m_CurrentHandBlockText;
         [SerializeField] private InputField m_HandBlockInput;
@@ -33,12 +43,60 @@ namespace Minecraft.PlayerControls
 
         [NonSerialized] private GameObject m_HandBlockInputGO;
 
+        [NonSerialized] private Vector3 m_DebugRayOrigin;
+        [NonSerialized] private Vector3 m_DebugRayDirection;
+        [NonSerialized] private Vector3? m_DebugHitPoint;
+        [NonSerialized] private bool m_DebugHasHit;
+        [NonSerialized] private LineRenderer m_RayLineRenderer;
+        [NonSerialized] private GameObject m_HitMarkerObject;
+
         public void Initialize(Camera camera, IAABBEntity playerEntity)
         {
             m_Camera = camera;
             m_PlayerEntity = playerEntity;
             m_DestroyRaycastSelector = DestroyRaycastSelect;
             m_PlaceRaycastSelector = PlaceRaycastSelect;
+            
+            InitializeDebugVisuals();
+        }
+
+        private void InitializeDebugVisuals()
+        {
+            if (m_RayLineRenderer == null)
+            {
+                GameObject rayObj = new GameObject("DebugRay");
+                rayObj.transform.SetParent(transform);
+                m_RayLineRenderer = rayObj.AddComponent<LineRenderer>();
+                m_RayLineRenderer.startWidth = RayWidth;
+                m_RayLineRenderer.endWidth = RayWidth;
+                m_RayLineRenderer.positionCount = 2;
+                m_RayLineRenderer.useWorldSpace = true;
+                m_RayLineRenderer.material = new Material(Shader.Find("Sprites/Default"));
+                m_RayLineRenderer.enabled = ShowDebugRay;
+            }
+
+            if (m_HitMarkerObject == null)
+            {
+                m_HitMarkerObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                m_HitMarkerObject.name = "DebugHitMarker";
+                m_HitMarkerObject.transform.SetParent(transform);
+                m_HitMarkerObject.transform.localScale = Vector3.one * 0.1f;
+                
+                Collider col = m_HitMarkerObject.GetComponent<Collider>();
+                if (col != null)
+                {
+                    Destroy(col);
+                }
+                
+                Renderer renderer = m_HitMarkerObject.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    renderer.material = new Material(Shader.Find("Sprites/Default"));
+                    renderer.material.color = HitColor;
+                }
+                
+                m_HitMarkerObject.SetActive(false);
+            }
         }
 
         private void OnEnable()
@@ -51,16 +109,36 @@ namespace Minecraft.PlayerControls
             SetDigProgress(0);
 
             m_HandBlockInputGO = m_HandBlockInput.gameObject;
+            
+            m_DebugHitPoint = null;
+            m_DebugHasHit = false;
+
+            if (m_RayLineRenderer != null)
+            {
+                m_RayLineRenderer.enabled = ShowDebugRay;
+            }
         }
 
         private void OnDisable()
         {
             SetDigProgress(0);
             ShaderUtility.TargetedBlockPosition = Vector3.down;
+            
+            if (m_RayLineRenderer != null)
+            {
+                m_RayLineRenderer.enabled = false;
+            }
+            
+            if (m_HitMarkerObject != null)
+            {
+                m_HitMarkerObject.SetActive(false);
+            }
         }
 
         private void Update()
         {
+            return;
+
             if (ChangeHandBlock())
             {
                 return;
@@ -73,8 +151,96 @@ namespace Minecraft.PlayerControls
 
             Ray ray = GetRay();
             IWorld world = m_PlayerEntity.World;
+
+            if (ShowDebugRay)
+            {
+                UpdateDebugRayData(ray, world);
+                UpdateDebugVisuals();
+            }
+
             DigBlock(ray, world);
             PlaceBlock(ray, world);
+        }
+
+        private void UpdateDebugRayData(Ray ray, IWorld world)
+        {
+            m_DebugRayOrigin = ray.origin;
+            m_DebugRayDirection = ray.direction;
+
+            if (Physics.RaycastBlock(ray, RaycastMaxDistance, world, m_DestroyRaycastSelector, out BlockRaycastHit hit))
+            {
+                m_DebugHitPoint = new Vector3(hit.Position.x + 0.5f, hit.Position.y + 0.5f, hit.Position.z + 0.5f);
+                m_DebugHasHit = true;
+            }
+            else
+            {
+                m_DebugHitPoint = null;
+                m_DebugHasHit = false;
+            }
+        }
+
+        private void UpdateDebugVisuals()
+        {
+            if (m_RayLineRenderer == null)
+            {
+                InitializeDebugVisuals();
+            }
+
+            if (m_DebugHasHit && m_DebugHitPoint.HasValue)
+            {
+                m_RayLineRenderer.enabled = true;
+                m_RayLineRenderer.startColor = HitColor;
+                m_RayLineRenderer.endColor = HitColor;
+                m_RayLineRenderer.SetPosition(0, m_DebugRayOrigin);
+                m_RayLineRenderer.SetPosition(1, m_DebugHitPoint.Value);
+
+                if (m_HitMarkerObject != null)
+                {
+                    m_HitMarkerObject.SetActive(true);
+                    m_HitMarkerObject.transform.position = m_DebugHitPoint.Value;
+                }
+            }
+            else
+            {
+                m_RayLineRenderer.enabled = true;
+                m_RayLineRenderer.startColor = RayColor;
+                m_RayLineRenderer.endColor = RayColor;
+                m_RayLineRenderer.SetPosition(0, m_DebugRayOrigin);
+                m_RayLineRenderer.SetPosition(1, m_DebugRayOrigin + m_DebugRayDirection * RaycastMaxDistance);
+
+                if (m_HitMarkerObject != null)
+                {
+                    m_HitMarkerObject.SetActive(false);
+                }
+            }
+        }
+
+        private void OnDrawGizmos()
+        {
+            if (!ShowDebugRay || !enabled)
+            {
+                return;
+            }
+
+            if (m_DebugHasHit && m_DebugHitPoint.HasValue)
+            {
+                Gizmos.color = HitColor;
+                Gizmos.DrawRay(m_DebugRayOrigin, m_DebugRayDirection * Vector3.Distance(m_DebugRayOrigin, m_DebugHitPoint.Value));
+
+                Vector3 hitPoint = m_DebugHitPoint.Value;
+                float size = 0.1f;
+                
+                Gizmos.DrawWireCube(hitPoint, Vector3.one * size);
+                
+                Gizmos.DrawLine(hitPoint - Vector3.up * 0.3f, hitPoint + Vector3.up * 0.3f);
+                Gizmos.DrawLine(hitPoint - Vector3.right * 0.3f, hitPoint + Vector3.right * 0.3f);
+                Gizmos.DrawLine(hitPoint - Vector3.forward * 0.3f, hitPoint + Vector3.forward * 0.3f);
+            }
+            else
+            {
+                Gizmos.color = RayColor;
+                Gizmos.DrawRay(m_DebugRayOrigin, m_DebugRayDirection * RaycastMaxDistance);
+            }
         }
 
         private bool ChangeHandBlock()
@@ -86,8 +252,6 @@ namespace Minecraft.PlayerControls
 
             if (m_HandBlockInputGO.activeInHierarchy)
             {
-                // 不用 onSubmit 了
-
                 m_CurrentHandBlockText.text = m_HandBlockInput.text;
                 m_HandBlockInput.DeactivateInputField();
                 m_HandBlockInputGO.SetActive(false);
@@ -119,72 +283,9 @@ namespace Minecraft.PlayerControls
             if (Physics.RaycastBlock(ray, RaycastMaxDistance, world, m_DestroyRaycastSelector, out BlockRaycastHit hit))
             {
                 ShaderUtility.TargetedBlockPosition = hit.Position;
-
-                if (Input.GetMouseButton(0))
-                {
-                    if (m_IsDigging)
-                    {
-                        if (hit.Position == m_FirstDigPos)
-                        {
-                            m_DiggingDamage += Time.deltaTime * 5;
-                            SetDigProgress(m_DiggingDamage / hit.Block.Hardness);
-
-                            if (m_DiggingDamage >= hit.Block.Hardness)
-                            {
-                                SetDigProgress(0);
-                                m_IsDigging = false;
-                                world.RWAccessor.SetBlock(hit.Position.x, hit.Position.y, hit.Position.z, world.BlockDataTable.GetBlock(0), Quaternion.identity, ModificationSource.PlayerAction);
-
-                                //block.PlayDigAudio(m_AudioSource);
-
-                                // if (Setting.SettingManager.Active.RenderingSetting.EnableDestroyEffect)
-                                // {
-                                //     ParticleSystem effect = Instantiate(m_DestroyEffectPrefab, firstHitPos + new Vector3(0.5f, 0.5f, 0.5f), Quaternion.identity).GetComponent<ParticleSystem>();
-                                //     ParticleSystem.MainModule main = effect.main;
-                                //     main.startColor = block.DestoryEffectColor;
-                                // }
-                            }
-                        }
-                        else
-                        {
-                            SetDigProgress(0);
-                            m_IsDigging = false;
-                        }
-                    }
-                    else
-                    {
-                        BlockData block = world.RWAccessor.GetBlock(hit.Position.x, hit.Position.y, hit.Position.z);
-                        m_IsDigging = true;
-                        m_DiggingDamage = 0;
-                        m_FirstDigPos = hit.Position;
-                    }
-                }
-
-                if (Input.GetMouseButtonDown(0))
-                {
-                    m_ClickedPos = hit.Position;
-                    m_ClickTime = Time.time;
-                }
-
-                if (Input.GetMouseButtonUp(0))
-                {
-                    SetDigProgress(0);
-                    m_IsDigging = false;
-
-                    BlockData block = world.RWAccessor.GetBlock(hit.Position.x, hit.Position.y, hit.Position.z);
-
-                    if ((hit.Position == m_ClickedPos) && (Time.time - m_ClickTime <= MaxClickSpacing))
-                    {
-                        block.Click(world, hit.Position.x, hit.Position.y, hit.Position.z);
-                    }
-
-                    m_ClickedPos = Vector3Int.down;
-                    m_ClickTime = 0;
-                }
             }
             else
             {
-                // 无选定方块
                 ShaderUtility.TargetedBlockPosition = Vector3.down;
             }
         }
@@ -205,18 +306,16 @@ namespace Minecraft.PlayerControls
                     {
                         Quaternion rotation = Quaternion.identity;
 
-                        // !!! 一定要按下面的顺序相乘，才能保证先绕 y 再绕 xz
-
                         if ((block.RotationAxes & BlockRotationAxes.AroundXOrZAxis) == BlockRotationAxes.AroundXOrZAxis)
                         {
-                            rotation *= Quaternion.FromToRotation(Vector3.up, hit.Normal); // 底部朝向法线
+                            rotation *= Quaternion.FromToRotation(Vector3.up, hit.Normal);
                         }
 
                         if ((block.RotationAxes & BlockRotationAxes.AroundYAxis) == BlockRotationAxes.AroundYAxis)
                         {
                             Vector3 forward = m_PlayerEntity.Forward;
                             forward = Mathf.Abs(forward.x) > Mathf.Abs(forward.z) ? new Vector3(forward.x, 0, 0) : new Vector3(0, 0, forward.z);
-                            rotation *= Quaternion.LookRotation(-forward.normalized, Vector3.up); // 看向玩家
+                            rotation *= Quaternion.LookRotation(-forward.normalized, Vector3.up);
                         }
 
                         world.RWAccessor.SetBlock(pos.x, pos.y, pos.z, block, rotation, ModificationSource.PlayerAction);
@@ -237,7 +336,9 @@ namespace Minecraft.PlayerControls
 
         private Ray GetRay()
         {
-            return m_Camera.ScreenPointToRay(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f));
+            Vector3 origin = m_PlayerEntity.Position - Vector3.up/2;
+            Vector3 direction = m_PlayerEntity.Forward;
+            return new Ray(origin, direction);
         }
 
         private void SetDigProgress(float progress)

@@ -10,7 +10,13 @@ namespace Minecraft.UI
 
         private RectTransform m_RectTransform;
         private Canvas m_Canvas;
-        private Vector2 m_Offset;
+        private static UnityEngine.Vector2 m_Offset;
+
+        public static UnityEngine.Vector2 MousePos {
+            get {
+                return m_Offset;
+            }
+        }
 
         private void Awake()
         {
