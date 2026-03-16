@@ -36,6 +36,11 @@ namespace Minecraft.PlayerControls
 
         public void LookRotation(Vector2 rotation, float deltaTime)
         {
+            if (!m_CursorLocked)
+            {
+                return;
+            }
+
             rotation *= Sensitivity;
             // 仅旋转相机，不旋转角色（角色由移动方向控制）
             m_CameraRotation *= Quaternion.Euler(-rotation.y, 0f, 0f);

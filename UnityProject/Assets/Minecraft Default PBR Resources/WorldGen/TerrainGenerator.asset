@@ -17,18 +17,21 @@ MonoBehaviour:
   WaterBlock: water
   GravelBlock: gravel
   BedrockBlock: bedrock
-  SeaLevel: 63
+  SeaLevel: 56
   CoordinateScale: 0.05
   HeightScale: 0.05
   BiomeDepthOffSet: 0
   BiomeDepthWeight: 1
   BiomeScaleOffset: 0
   BiomeScaleWeight: 1
-  BaseSize: 8.5
-  StretchY: 12
+  BaseSize: 9.2
+  StretchY: 8.5
   LowerLimitScale: 512
   UpperLimitScale: 512
   BiomeSize: 4
   RiverSize: 4
   DepthNoiseScale: {x: 200, y: 200, z: 200}
   MainNoiseScale: {x: 0.0125, y: 0.00625, z: 0.0125}
+  LimitWorldSize: 1
+  WorldRadius: 112
+  BorderBlendWidth: 24

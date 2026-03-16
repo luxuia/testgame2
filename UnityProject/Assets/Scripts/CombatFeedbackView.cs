@@ -6,13 +6,11 @@ namespace Minecraft.Combat
     [DisallowMultipleComponent]
     public sealed class CombatFeedbackView : MonoBehaviour
     {
-        [Header("Health Bar")]
+        [Header("Health Bar Overlay")]
         [SerializeField] private bool m_ShowHealthBar = true;
         [SerializeField] private Vector3 m_HealthBarOffset = new Vector3(0f, 2.1f, 0f);
-        [SerializeField] [Min(0.2f)] private float m_HealthBarWidth = 1.35f;
-        [SerializeField] [Min(0.01f)] private float m_HealthBarThickness = 0.06f;
-        [SerializeField] private Color m_HealthBarBackColor = new Color(0f, 0f, 0f, 0.72f);
-        [SerializeField] private Color m_HealthBarFillColor = new Color(0.18f, 0.92f, 0.35f, 0.95f);
+        [SerializeField] private string m_DisplayNameOverride;
+        [SerializeField] [TextArea] private string m_BuffSummaryOverride;
 
         [Header("Floating Damage Text")]
         [SerializeField] private bool m_ShowFloatingDamage = true;
@@ -33,15 +31,13 @@ namespace Minecraft.Combat
 
         private readonly List<FloatingTextRuntime> m_FloatingTexts = new List<FloatingTextRuntime>(8);
 
-        private Transform m_BarRoot;
-        private LineRenderer m_BackLine;
-        private LineRenderer m_FillLine;
-        private Material m_LineMaterial;
+        private CombatOverlayUIManager m_OverlayManager;
         private Font m_Font;
-
         private float m_CurrentHealth = 1f;
         private float m_MaxHealth = 1f;
         private bool m_IsInitialized;
+        private string m_RuntimeDisplayName;
+        private string m_RuntimeBuffSummary;
 
         public void EnsureInitialized()
         {
@@ -51,35 +47,38 @@ namespace Minecraft.Combat
             }
 
             m_IsInitialized = true;
-            if (!m_ShowHealthBar)
-            {
-                return;
-            }
-
-            m_LineMaterial = BuildLineMaterial();
-            GameObject root = new GameObject("CombatHealthBarRoot");
-            root.transform.SetParent(transform, false);
-            m_BarRoot = root.transform;
-
-            m_BackLine = CreateLineRenderer("Back", m_HealthBarBackColor, m_HealthBarThickness);
-            m_BackLine.transform.SetParent(m_BarRoot, false);
-            m_BackLine.SetPosition(0, new Vector3(-m_HealthBarWidth * 0.5f, 0f, 0f));
-            m_BackLine.SetPosition(1, new Vector3(m_HealthBarWidth * 0.5f, 0f, 0f));
-
-            m_FillLine = CreateLineRenderer("Fill", m_HealthBarFillColor, m_HealthBarThickness * 0.8f);
-            m_FillLine.transform.SetParent(m_BarRoot, false);
-            UpdateHealthBar();
+            PushOverlayState();
         }
 
         public void SetHealth(float currentHealth, float maxHealth)
         {
             m_MaxHealth = Mathf.Max(1f, maxHealth);
             m_CurrentHealth = Mathf.Clamp(currentHealth, 0f, m_MaxHealth);
-            if (m_ShowHealthBar)
+            PushOverlayState();
+        }
+
+        public void SetOverlayMeta(string displayName, string buffSummary = null)
+        {
+            m_RuntimeDisplayName = displayName;
+            m_RuntimeBuffSummary = buffSummary;
+            PushOverlayState();
+        }
+
+        public void SetHealthBarVisible(bool visible)
+        {
+            if (m_ShowHealthBar == visible)
             {
-                EnsureInitialized();
-                UpdateHealthBar();
+                return;
             }
+
+            m_ShowHealthBar = visible;
+            if (!m_ShowHealthBar)
+            {
+                UnregisterOverlay();
+                return;
+            }
+
+            PushOverlayState();
         }
 
         public void ShowDamage(float damage)
@@ -89,9 +88,10 @@ namespace Minecraft.Combat
                 return;
             }
 
-            if (m_Font == null)
+            Font runtimeFont = ResolveRuntimeFont();
+            if (runtimeFont == null)
             {
-                m_Font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                return;
             }
 
             GameObject go = new GameObject("CombatDamageText");
@@ -101,7 +101,7 @@ namespace Minecraft.Combat
             go.transform.position = transform.position + m_DamageTextOffset + new Vector3(jitterX, 0f, 0f);
 
             TextMesh textMesh = go.AddComponent<TextMesh>();
-            textMesh.font = m_Font;
+            textMesh.font = runtimeFont;
             textMesh.anchor = TextAnchor.MiddleCenter;
             textMesh.alignment = TextAlignment.Center;
             textMesh.characterSize = Mathf.Max(0.01f, m_DamageTextScale);
@@ -110,9 +110,9 @@ namespace Minecraft.Combat
             textMesh.color = m_DamageTextColor;
 
             MeshRenderer renderer = go.GetComponent<MeshRenderer>();
-            if (renderer != null && m_Font != null && m_Font.material != null)
+            if (renderer != null && runtimeFont.material != null)
             {
-                renderer.sharedMaterial = m_Font.material;
+                renderer.sharedMaterial = runtimeFont.material;
             }
 
             m_FloatingTexts.Add(new FloatingTextRuntime
@@ -124,54 +124,95 @@ namespace Minecraft.Combat
             });
         }
 
+        private void OnEnable()
+        {
+            if (!m_IsInitialized)
+            {
+                return;
+            }
+
+            PushOverlayState();
+        }
+
+        private void OnDisable()
+        {
+            UnregisterOverlay();
+        }
+
         private void LateUpdate()
         {
-            UpdateHealthBarTransform();
             UpdateFloatingTexts();
         }
 
         private void OnDestroy()
         {
-            if (m_LineMaterial != null)
+            UnregisterOverlay();
+        }
+
+        private void PushOverlayState()
+        {
+            if (!m_ShowHealthBar || !isActiveAndEnabled)
             {
-                Destroy(m_LineMaterial);
-                m_LineMaterial = null;
+                return;
+            }
+
+            EnsureOverlayManager();
+            if (m_OverlayManager == null)
+            {
+                return;
+            }
+
+            m_OverlayManager.RegisterOrUpdate(
+                this,
+                transform,
+                m_HealthBarOffset,
+                m_CurrentHealth,
+                m_MaxHealth,
+                ResolveDisplayName(),
+                ResolveBuffSummary());
+        }
+
+        private void EnsureOverlayManager()
+        {
+            if (m_OverlayManager == null)
+            {
+                m_OverlayManager = CombatOverlayUIManager.EnsureInstance();
             }
         }
 
-        private void UpdateHealthBarTransform()
+        private void UnregisterOverlay()
         {
-            if (!m_ShowHealthBar || m_BarRoot == null)
+            if (m_OverlayManager == null)
             {
                 return;
             }
 
-            m_BarRoot.position = transform.position + m_HealthBarOffset;
-            Camera cam = Camera.main;
-            if (cam == null)
-            {
-                return;
-            }
-
-            Vector3 toBar = m_BarRoot.position - cam.transform.position;
-            if (toBar.sqrMagnitude > 0.0001f)
-            {
-                m_BarRoot.rotation = Quaternion.LookRotation(toBar.normalized, Vector3.up);
-            }
+            m_OverlayManager.Unregister(this);
         }
 
-        private void UpdateHealthBar()
+        private string ResolveDisplayName()
         {
-            if (m_FillLine == null)
+            if (!string.IsNullOrWhiteSpace(m_RuntimeDisplayName))
             {
-                return;
+                return m_RuntimeDisplayName;
             }
 
-            float ratio = Mathf.Clamp01(m_CurrentHealth / Mathf.Max(1f, m_MaxHealth));
-            float left = -m_HealthBarWidth * 0.5f;
-            float right = left + m_HealthBarWidth * ratio;
-            m_FillLine.SetPosition(0, new Vector3(left, 0f, -0.01f));
-            m_FillLine.SetPosition(1, new Vector3(right, 0f, -0.01f));
+            if (!string.IsNullOrWhiteSpace(m_DisplayNameOverride))
+            {
+                return m_DisplayNameOverride;
+            }
+
+            return gameObject.name;
+        }
+
+        private string ResolveBuffSummary()
+        {
+            if (!string.IsNullOrWhiteSpace(m_RuntimeBuffSummary))
+            {
+                return m_RuntimeBuffSummary;
+            }
+
+            return m_BuffSummaryOverride;
         }
 
         private void UpdateFloatingTexts()
@@ -220,42 +261,45 @@ namespace Minecraft.Combat
             }
         }
 
-        private LineRenderer CreateLineRenderer(string name, Color color, float width)
+        private Font ResolveRuntimeFont()
         {
-            GameObject go = new GameObject(name);
-            LineRenderer line = go.AddComponent<LineRenderer>();
-            line.useWorldSpace = false;
-            line.positionCount = 2;
-            line.numCapVertices = 2;
-            line.alignment = LineAlignment.View;
-            line.widthMultiplier = Mathf.Max(0.005f, width);
-            line.material = m_LineMaterial;
-            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            line.receiveShadows = false;
-            line.textureMode = LineTextureMode.Stretch;
-            line.startColor = color;
-            line.endColor = color;
-            return line;
+            if (m_Font != null)
+            {
+                return m_Font;
+            }
+
+            // Unity 2022+ removed Arial as built-in runtime font.
+            m_Font = TryGetBuiltinFont("LegacyRuntime.ttf");
+            if (m_Font == null)
+            {
+                m_Font = TryGetBuiltinFont("Arial.ttf");
+            }
+
+            if (m_Font == null)
+            {
+                m_Font = Font.CreateDynamicFontFromOSFont(
+                    new[] { "Arial", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei" },
+                    16);
+            }
+
+            return m_Font;
         }
 
-        private static Material BuildLineMaterial()
+        private static Font TryGetBuiltinFont(string fontPath)
         {
-            Shader shader = Shader.Find("Sprites/Default");
-            if (shader == null)
+            if (string.IsNullOrWhiteSpace(fontPath))
             {
-                shader = Shader.Find("Unlit/Color");
-            }
-            if (shader == null)
-            {
-                shader = Shader.Find("Universal Render Pipeline/Unlit");
+                return null;
             }
 
-            if (shader == null)
+            try
             {
-                shader = Shader.Find("Standard");
+                return Resources.GetBuiltinResource<Font>(fontPath);
             }
-
-            return new Material(shader);
+            catch (System.ArgumentException)
+            {
+                return null;
+            }
         }
     }
 }

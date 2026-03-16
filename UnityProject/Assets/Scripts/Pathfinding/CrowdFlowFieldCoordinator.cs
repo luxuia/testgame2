@@ -7,6 +7,9 @@ namespace Minecraft.Pathfinding
     [DisallowMultipleComponent]
     public class CrowdFlowFieldCoordinator : MonoBehaviour
     {
+        private const float StuckRepathDelaySec = 0.5f;
+        private const float StuckMoveSqrEpsilon = 0.0001f;
+
         [Header("Agents")]
         [Tooltip("自动收集子节点上的 CrowdAgentController")]
         public bool AutoFindAgents = true;
@@ -77,6 +80,12 @@ namespace Minecraft.Pathfinding
 
         [Tooltip("目标在该半径内时不再采样寻路（米）")]
         public float NoPathfindRadius = 2f;
+
+        [Header("Vertical Safety")]
+        [Tooltip("禁止代理选择更低楼层节点，避免掉入下层")]
+        public bool PreventDescendingToLowerLayer = true;
+        [Tooltip("允许单步下行的最大层数；0 表示不允许下行")]
+        [Min(0)] public int MaxDownwardNodeStep = 0;
 
         [Header("Formation (Shared Target)")]
         [Tooltip("共享目标时，是否为每个代理分配不同终点（目标周围阵型）")]
@@ -180,6 +189,7 @@ namespace Minecraft.Pathfinding
         [System.NonSerialized] private readonly Dictionary<Vector3Int, float> m_NextPrepareCheckTimeByRequestedTarget = new Dictionary<Vector3Int, float>();
         [System.NonSerialized] private readonly Dictionary<Vector3Int, float> m_LastRequestedTargetUseTime = new Dictionary<Vector3Int, float>();
         [System.NonSerialized] private readonly List<Vector3Int> m_PrepareTargetCleanupBuffer = new List<Vector3Int>(64);
+        [System.NonSerialized] private readonly Dictionary<Vector3Int, Vector3Int?> m_WalkableTargetCache = new Dictionary<Vector3Int, Vector3Int?>(64);
         [System.NonSerialized] private readonly Stack<List<CrowdAgentController>> m_GroupListPool = new Stack<List<CrowdAgentController>>();
         [System.NonSerialized] private bool m_AgentsDirty = true;
         [System.NonSerialized] private float m_NextAgentRefreshTime;
@@ -216,6 +226,9 @@ namespace Minecraft.Pathfinding
             public Vector2 DesiredPlanarVelocity;
             public int FlowTargetVersion;
             public bool InFormationHandover;
+            public Vector3 LastObservedPosition;
+            public bool HasObservedPosition;
+            public float StalledSinceTime;
         }
 
         private void Start()
@@ -427,6 +440,21 @@ namespace Minecraft.Pathfinding
                 {
                     agent.ForceIdleAnimation();
                     continue;
+                }
+
+                if (PreventDescendingToLowerLayer)
+                {
+                    int allowedDrop = Mathf.Max(0, MaxDownwardNodeStep);
+                    int currentY = agent.GetCurrentGridPosition().y;
+                    if (runtime.NextNode.y < currentY - allowedDrop)
+                    {
+                        runtime.HasNextNode = false;
+                        runtime.CurrentPlanarVelocity = Vector2.zero;
+                        runtime.DesiredPlanarVelocity = Vector2.zero;
+                        m_AgentRuntimeStates[agent] = runtime;
+                        agent.ForceIdleAnimation();
+                        continue;
+                    }
                 }
 
                 if (agent.IsNearNode(runtime.NextNode))
@@ -973,6 +1001,8 @@ namespace Minecraft.Pathfinding
             float cacheLifetime = Mathf.Max(0.05f, FlowFieldCacheLifetime);
             int searchRadius = Mathf.Max(2, FlowFieldSearchRadius);
             ReleaseTargetGroupsToPool();
+            m_WalkableTargetCache.Clear();
+            Vector3Int safeFlowSharedTarget = ResolveTargetToWalkable(flowSharedTarget, searchRadius);
 
             int currentFrame = Time.frameCount;
             int activeCount = 0;
@@ -995,8 +1025,9 @@ namespace Minecraft.Pathfinding
 
                 activeCount++;
 
-                Vector3Int target = ResolveAgentTarget(agent, liveSharedTarget);
-                Vector3Int pathTarget = ForceSharedTarget ? flowSharedTarget : target;
+                Vector3Int rawTarget = ResolveAgentTarget(agent, liveSharedTarget);
+                Vector3Int target = ResolveTargetToWalkable(rawTarget, searchRadius);
+                Vector3Int pathTarget = ForceSharedTarget ? safeFlowSharedTarget : target;
                 if (ForceSharedTarget || !agent.HasTarget || agent.TargetBlock != target)
                 {
                     agent.SetTarget(target);
@@ -1008,7 +1039,10 @@ namespace Minecraft.Pathfinding
                     {
                         NextPathSampleTime = now,
                         HasNextNode = false,
-                        FlowTargetVersion = flowTargetVersion
+                        FlowTargetVersion = flowTargetVersion,
+                        LastObservedPosition = agent.transform.position,
+                        HasObservedPosition = true,
+                        StalledSinceTime = -1f
                     };
                 }
 
@@ -1019,6 +1053,27 @@ namespace Minecraft.Pathfinding
                     runtime.NextPathSampleTime = now;
                 }
 
+                Vector3 currentPosition = agent.transform.position;
+                if (!runtime.HasObservedPosition)
+                {
+                    runtime.LastObservedPosition = currentPosition;
+                    runtime.HasObservedPosition = true;
+                    runtime.StalledSinceTime = -1f;
+                }
+                else
+                {
+                    float movedSqr = (currentPosition - runtime.LastObservedPosition).sqrMagnitude;
+                    if (movedSqr > StuckMoveSqrEpsilon)
+                    {
+                        runtime.LastObservedPosition = currentPosition;
+                        runtime.StalledSinceTime = -1f;
+                    }
+                    else if (runtime.StalledSinceTime < 0f)
+                    {
+                        runtime.StalledSinceTime = now;
+                    }
+                }
+
                 if (IsWithinNoPathfindRadius(agent, target))
                 {
                     runtime.HasNextNode = false;
@@ -1026,11 +1081,12 @@ namespace Minecraft.Pathfinding
                     runtime.CurrentPlanarVelocity = Vector2.zero;
                     runtime.DesiredPlanarVelocity = Vector2.zero;
                     runtime.InFormationHandover = false;
+                    runtime.StalledSinceTime = -1f;
                     m_AgentRuntimeStates[agent] = runtime;
                     continue;
                 }
 
-                bool canUseFormationHandover = ForceSharedTarget && EnableTargetFormation && target != liveSharedTarget;
+                bool canUseFormationHandover = ForceSharedTarget && EnableTargetFormation && rawTarget != liveSharedTarget;
                 if (!canUseFormationHandover)
                 {
                     runtime.InFormationHandover = false;
@@ -1056,11 +1112,38 @@ namespace Minecraft.Pathfinding
 
                 if (runtime.InFormationHandover)
                 {
+                    if (PreventDescendingToLowerLayer)
+                    {
+                        int allowedDrop = Mathf.Max(0, MaxDownwardNodeStep);
+                        int currentY = agent.GetCurrentGridPosition().y;
+                        if (target.y < currentY - allowedDrop)
+                        {
+                            runtime.HasNextNode = false;
+                            runtime.CurrentPlanarVelocity = Vector2.zero;
+                            runtime.DesiredPlanarVelocity = Vector2.zero;
+                            runtime.InFormationHandover = false;
+                            runtime.NextPathSampleTime = now + Mathf.Min(0.25f, GetRandomRepathInterval() * 0.25f);
+                            m_AgentRuntimeStates[agent] = runtime;
+                            continue;
+                        }
+                    }
+
                     runtime.HasNextNode = true;
                     runtime.NextNode = target;
                     runtime.NextPathSampleTime = now + GetRandomRepathInterval();
+                    runtime.StalledSinceTime = -1f;
                     m_AgentRuntimeStates[agent] = runtime;
                     continue;
+                }
+
+                if (runtime.HasNextNode &&
+                    !agent.IsNearNode(runtime.NextNode) &&
+                    runtime.StalledSinceTime >= 0f &&
+                    (now - runtime.StalledSinceTime) >= StuckRepathDelaySec)
+                {
+                    runtime.HasNextNode = false;
+                    runtime.NextPathSampleTime = now;
+                    runtime.StalledSinceTime = now;
                 }
 
                 bool shouldSamplePath = now >= runtime.NextPathSampleTime;
@@ -1182,6 +1265,20 @@ namespace Minecraft.Pathfinding
                             searchRadius,
                             out Vector3Int next))
                         {
+                            if (PreventDescendingToLowerLayer)
+                            {
+                                int allowedDrop = Mathf.Max(0, MaxDownwardNodeStep);
+                                if (next.y < current.y - allowedDrop)
+                                {
+                                    runtime.HasNextNode = false;
+                                    runtime.CurrentPlanarVelocity = Vector2.zero;
+                                    runtime.DesiredPlanarVelocity = Vector2.zero;
+                                    m_AgentRuntimeStates[agent] = runtime;
+                                    failed++;
+                                    continue;
+                                }
+                            }
+
                             runtime.HasNextNode = true;
                             runtime.NextNode = next;
                             m_AgentRuntimeStates[agent] = runtime;
@@ -1234,6 +1331,25 @@ namespace Minecraft.Pathfinding
             }
 
             return IsWithinTargetRadius(agent.transform.position, target, radius);
+        }
+
+        private Vector3Int ResolveTargetToWalkable(Vector3Int target, int searchRadius)
+        {
+            if (m_World == null || !m_World.Initialized)
+            {
+                return target;
+            }
+
+            if (m_WalkableTargetCache.TryGetValue(target, out Vector3Int? cached))
+            {
+                return cached ?? target;
+            }
+
+            Vector3Int? walkable = AStarPathfinding.IsWalkableNode(target, m_World)
+                ? target
+                : AStarPathfinding.FindNearestWalkableNode(target, m_World, Mathf.Max(1, searchRadius));
+            m_WalkableTargetCache[target] = walkable;
+            return walkable ?? target;
         }
 
         private static bool IsWithinTargetRadius(Vector3 worldPos, Vector3Int target, float radius)

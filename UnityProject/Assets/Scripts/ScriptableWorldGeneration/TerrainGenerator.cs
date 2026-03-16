@@ -33,6 +33,12 @@ namespace Minecraft.ScriptableWorldGeneration
         public Vector3 DepthNoiseScale = new Vector3(200f, 200f, 200f);
         public Vector3 MainNoiseScale = new Vector3(1 / 80f, 1 / 160f, 1 / 80f);
 
+        [Space]
+        [Header("Finite World")]
+        public bool LimitWorldSize = true;
+        [Min(32)] public int WorldRadius = 112;
+        [Min(0)] public int BorderBlendWidth = 24;
+
 
         public override void Generate(IWorld world, ChunkPos pos, BlockData[,,] blocks, Quaternion[,,] rotations, byte[,] heightMap, GenerationHelper helper, GenerationContext context)
         {
@@ -79,6 +85,7 @@ namespace Minecraft.ScriptableWorldGeneration
 
             // 添加生物群系特有方块
             ReplaceBiomeBlocks(world, pos, blocks, helper, context);
+            ApplyFiniteWorldMask(world, pos, blocks);
         }
 
         private void GenerateBasicTerrain(IWorld world, ChunkPos pos, BlockData[,,] blocks, GenerationHelper helper, GenerationContext context)
@@ -316,7 +323,8 @@ namespace Minecraft.ScriptableWorldGeneration
 
             for (int y = ChunkHeight - 1; y >= 0; y--)
             {
-                if (y <= context.Rand.Next(5))
+                // Raise bedrock layer to reduce effective underground depth.
+                if (y <= 24 + context.Rand.Next(6))
                 {
                     blocks[columnX, y, columnZ] = bedrockBlock;
                 }
@@ -378,6 +386,60 @@ namespace Minecraft.ScriptableWorldGeneration
         private double GetDensityMapValue(double[] densityMap, int x, int y, int z)
         {
             return densityMap[(x * 5 + z) * 33 + y];
+        }
+
+        private void ApplyFiniteWorldMask(IWorld world, ChunkPos pos, BlockData[,,] blocks)
+        {
+            if (!LimitWorldSize || WorldRadius < 32)
+            {
+                return;
+            }
+
+            BlockData airBlock = world.BlockDataTable.GetBlock(AirBlock);
+            BlockData waterBlock = world.BlockDataTable.GetBlock(WaterBlock);
+            BlockData bedrockBlock = world.BlockDataTable.GetBlock(BedrockBlock);
+            int innerRadius = Mathf.Max(32, WorldRadius);
+            int blendWidth = Mathf.Max(0, BorderBlendWidth);
+            int outerRadius = innerRadius + blendWidth;
+
+            for (int x = 0; x < ChunkWidth; x++)
+            {
+                int worldX = pos.X + x;
+
+                for (int z = 0; z < ChunkWidth; z++)
+                {
+                    int worldZ = pos.Z + z;
+                    float dist = Mathf.Sqrt(worldX * worldX + worldZ * worldZ);
+
+                    if (dist <= innerRadius)
+                    {
+                        continue;
+                    }
+
+                    float t = blendWidth > 0
+                        ? Mathf.InverseLerp(innerRadius, outerRadius, dist)
+                        : 1f;
+                    t = Mathf.Clamp01(t);
+
+                    int floodHeight = Mathf.RoundToInt(Mathf.Lerp(SeaLevel + 2, SeaLevel - 2, t));
+
+                    for (int y = 0; y < ChunkHeight; y++)
+                    {
+                        if (y <= 24)
+                        {
+                            blocks[x, y, z] = bedrockBlock;
+                        }
+                        else if (y <= floodHeight)
+                        {
+                            blocks[x, y, z] = waterBlock;
+                        }
+                        else
+                        {
+                            blocks[x, y, z] = airBlock;
+                        }
+                    }
+                }
+            }
         }
     }
 }

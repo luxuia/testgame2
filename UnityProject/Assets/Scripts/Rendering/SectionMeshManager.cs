@@ -62,7 +62,11 @@ namespace Minecraft.Rendering
                 }
             });
 
-            Vector3 position = m_World.PlayerTransform.position;
+            if (!TryGetPlayerPosition(out Vector3 position))
+            {
+                Profiler.EndSample();
+                return;
+            }
             int limit = m_BuildNotImportantMeshPreFrame;
 
             while (m_NotImportantDirtySectionQueue.Count > 0 && limit-- > 0)
@@ -80,6 +84,31 @@ namespace Minecraft.Rendering
             UpdateFallbacks(m_ImportantDirtySectionQueue);
 
             Profiler.EndSample();
+        }
+
+        private bool TryGetPlayerPosition(out Vector3 playerPosition)
+        {
+            playerPosition = default;
+            if (m_World == null)
+            {
+                return false;
+            }
+
+            Transform playerTransform = m_World.PlayerTransform;
+            if (playerTransform == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                playerPosition = playerTransform.position;
+                return true;
+            }
+            catch (MissingReferenceException)
+            {
+                return false;
+            }
         }
 
         private void TryEnqueueMeshWork(Vector3Int section, Vector3 playerPos, bool important)

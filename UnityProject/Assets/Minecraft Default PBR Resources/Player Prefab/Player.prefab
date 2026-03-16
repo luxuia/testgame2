@@ -75,6 +75,14 @@ MonoBehaviour:
   m_CombatInitialHealth: 100
   m_CombatAttackPower: 10
   m_CombatDefense: 2
+  m_DespawnDelayOnDeath: 1.5
+  m_DestroyOnDespawn: 1
+  m_SnapToGroundOnInitialize: 1
+  m_GroundSnapOffset: 0.05
+  m_RespawnOnDeath: 1
+  m_RespawnSearchRadius: 12
+  m_RespawnHeadClearance: 2
+  m_RespawnWithFullHealth: 1
   m_FirstPersonLook:
     EnableSmooth: 0
     SmoothTime: 5
@@ -168,6 +176,7 @@ MonoBehaviour:
     m_BobDuration: 0.2
     m_BobAmount: 0.1
   m_FighterAnimator: {fileID: 0}
+  m_CombatFeedback: {fileID: 0}
   m_OnStepOnBlock:
     m_PersistentCalls:
       m_Calls: []
@@ -350,6 +359,10 @@ PrefabInstance:
       propertyPath: m_LocalPosition.y
       value: -1
       objectReference: {fileID: 0}
+    - target: {fileID: 9500000, guid: 3755496ec9163a345a79e3561f6a9af4, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: de6dcbc5e6e849c4dab93c5023c4a95b, type: 2}
     - target: {fileID: 9500000, guid: 3755496ec9163a345a79e3561f6a9af4, type: 3}
       propertyPath: m_ApplyRootMotion
       value: 0

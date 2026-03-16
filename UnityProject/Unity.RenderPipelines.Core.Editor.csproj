@@ -150,8 +150,8 @@
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Editor\MaterialUpgrader.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Editor\Camera\CameraUI.Output.Drawers.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Editor\LookDev\ToolbarRadio.cs" />
-    <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Editor\Lighting\LightAnchorEditor.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Editor\Volume\Drawers\IntParameterDrawer.cs" />
+    <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Editor\Lighting\LightAnchorEditor.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Editor\Volume\Drawers\FloatParameterDrawer.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Editor\CoreEditorUtils.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Editor\QuaternionPropertyDrawer.cs" />

@@ -117,8 +117,8 @@
     <Compile Include="Library\PackageCache\com.unity.scriptablebuildpipeline@1.21.21\Editor\Utilities\HashStream.cs" />
     <Compile Include="Library\PackageCache\com.unity.scriptablebuildpipeline@1.21.21\Editor\Tasks\GenerateBundlePacking.cs" />
     <Compile Include="Library\PackageCache\com.unity.scriptablebuildpipeline@1.21.21\Editor\Utilities\ContentFileIdentifiers.cs" />
-    <Compile Include="Library\PackageCache\com.unity.scriptablebuildpipeline@1.21.21\Editor\Utilities\ThreadingManager.cs" />
     <Compile Include="Library\PackageCache\com.unity.scriptablebuildpipeline@1.21.21\Editor\Utilities\CommonStrings.cs" />
+    <Compile Include="Library\PackageCache\com.unity.scriptablebuildpipeline@1.21.21\Editor\Utilities\ThreadingManager.cs" />
     <Compile Include="Library\PackageCache\com.unity.scriptablebuildpipeline@1.21.21\Editor\Shared\DefaultBuildTasks.cs" />
     <Compile Include="Library\PackageCache\com.unity.scriptablebuildpipeline@1.21.21\Editor\Utilities\BuildCacheUtility.cs" />
     <Compile Include="Library\PackageCache\com.unity.scriptablebuildpipeline@1.21.21\Editor\Utilities\USerialize\USerialize.cs" />

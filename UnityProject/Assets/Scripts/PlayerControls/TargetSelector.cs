@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Minecraft.Entities;
+using Minecraft.Pathfinding;
 using Minecraft.PhysicSystem;
 using Minecraft.Rendering;
 using UnityEngine;
@@ -17,7 +18,7 @@ namespace Minecraft.PlayerControls
     }
 
     /// <summary>
-    /// 目标选择器，处理鼠标点击选中目标格子
+    /// 目标选择器：消费标准化输入命令，维护目标选择状态与可视化表现。
     /// </summary>
     [DisallowMultipleComponent]
     public class TargetSelector : MonoBehaviour
@@ -87,6 +88,7 @@ namespace Minecraft.PlayerControls
         [NonSerialized] private bool m_SelectionVisualDirty;
         [NonSerialized] private int m_SelectionVersion;
         [NonSerialized] private readonly HashSet<Vector3Int> m_ProcessingBlocks = new HashSet<Vector3Int>();
+        [NonSerialized] private PlayerCommandRouter m_CommandRouter;
 
         public Vector3Int? SelectedTargetBlock => m_SelectedTargetBlock;
         public Vector3Int? StandPosition => m_StandPosition;
@@ -99,13 +101,15 @@ namespace Minecraft.PlayerControls
         public int SelectionVersion => m_SelectionVersion;
 
         public event UnityAction<Vector3Int> OnTargetSelectedEvent;
+        public event UnityAction<Vector3Int> OnMoveTargetSelectedEvent;
         public event UnityAction OnTargetClearedEvent;
         public event UnityAction OnSelectionChangedEvent;
 
-        public void Initialize(Camera camera, IAABBEntity playerEntity)
+        public void Initialize(Camera camera, IAABBEntity playerEntity, PlayerCommandRouter commandRouter = null)
         {
             m_Camera = camera;
             m_PlayerEntity = playerEntity;
+            m_CommandRouter = commandRouter != null ? commandRouter : PlayerCommandRouter.Resolve(this);
             m_SurfaceRaycastFilter ??= SelectSurfaceRaycastFilter;
             
             InitializeVisuals();
@@ -215,53 +219,107 @@ namespace Minecraft.PlayerControls
 
         private void HandleInput()
         {
-            if (!m_IsPointerSelecting)
+            if (!TryEnsureCommandRouter())
             {
-                if (Input.GetMouseButtonDown(0))
-                {
-                    TryBeginPointerSelection(0, TargetSelectionAction.Mine);
-                }
-                else if (Input.GetMouseButtonDown(1))
-                {
-                    TryBeginPointerSelection(1, TargetSelectionAction.Build);
-                }
+                return;
             }
 
-            if (m_IsPointerSelecting && m_PointerMouseButton >= 0)
+            IReadOnlyList<PlayerCommand> commands = m_CommandRouter.FrameCommands;
+            for (int i = 0; i < commands.Count; i++)
             {
-                if (Input.GetMouseButton(m_PointerMouseButton))
-                {
-                    Vector2 cursorPosition = GetCursorPosition();
-                    float threshold = Mathf.Max(0f, DragThresholdPixels);
-                    if (!m_IsDragging && (cursorPosition - m_PointerStartCursor).sqrMagnitude > threshold * threshold)
-                    {
-                        m_IsDragging = true;
-                    }
-
-                    TryAppendPointerSample();
-                }
-
-                if (Input.GetMouseButtonUp(m_PointerMouseButton))
-                {
-                    ResolvePointerSelectionRelease();
-                    CancelPointerSelection();
-                }
-            }
-
-            if (Input.GetKeyDown(KeyCode.Escape))
-            {
-                ClearTarget();
+                HandleCommand(commands[i]);
             }
         }
 
-        private void TryBeginPointerSelection(int mouseButton, TargetSelectionAction action)
+        private bool TryEnsureCommandRouter()
+        {
+            if (m_CommandRouter != null)
+            {
+                return true;
+            }
+
+            m_CommandRouter = PlayerCommandRouter.Resolve(this);
+            return m_CommandRouter != null;
+        }
+
+        private void HandleCommand(PlayerCommand command)
+        {
+            // 右键挖掘选择是一个小状态机：Down 开始、Hold 采样、Up 提交。
+            switch (command.Type)
+            {
+                case PlayerCommandType.MovePrimaryDown:
+                    if (CanStartSelection(command))
+                    {
+                        TryIssueMoveCommand(command.ScreenPosition);
+                    }
+                    break;
+                case PlayerCommandType.MineSecondaryDown:
+                    if (CanStartSelection(command))
+                    {
+                        TryBeginPointerSelection(1, TargetSelectionAction.Mine, command.ScreenPosition);
+                    }
+                    break;
+                case PlayerCommandType.MineSecondaryHold:
+                    HandleMineSelectionHold(command);
+                    break;
+                case PlayerCommandType.MineSecondaryUp:
+                    if (IsPointerSelectionActive())
+                    {
+                        ResolvePointerSelectionRelease();
+                        CancelPointerSelection();
+                    }
+                    break;
+                case PlayerCommandType.CancelSelection:
+                    ClearTarget();
+                    break;
+            }
+        }
+
+        private void HandleMineSelectionHold(PlayerCommand command)
+        {
+            if (!IsPointerSelectionActive() || !command.HasScreenPosition)
+            {
+                return;
+            }
+
+            float threshold = Mathf.Max(0f, DragThresholdPixels);
+            if (!m_IsDragging && (command.ScreenPosition - m_PointerStartCursor).sqrMagnitude > threshold * threshold)
+            {
+                m_IsDragging = true;
+            }
+
+            TryAppendPointerSample(command.ScreenPosition);
+        }
+
+        private bool IsPointerSelectionActive()
+        {
+            return m_IsPointerSelecting && m_PointerMouseButton >= 0;
+        }
+
+        private bool CanStartSelection(PlayerCommand command)
+        {
+            return !m_IsPointerSelecting && command.HasScreenPosition;
+        }
+
+        private void TryIssueMoveCommand(Vector2 cursorPosition)
+        {
+            if (!TryGetMoveTarget(cursorPosition, out Vector3Int moveTarget))
+            {
+                return;
+            }
+
+            ClearTarget();
+            OnMoveTargetSelectedEvent?.Invoke(moveTarget);
+        }
+
+        private void TryBeginPointerSelection(int mouseButton, TargetSelectionAction action, Vector2 cursorPosition)
         {
             if (m_Camera == null || m_PlayerEntity == null)
             {
                 return;
             }
 
-            if (!TryGetPointerSelectionBlock(action, out Vector3Int block))
+            if (!TryGetPointerSelectionBlock(action, cursorPosition, out Vector3Int block))
             {
                 return;
             }
@@ -269,7 +327,7 @@ namespace Minecraft.PlayerControls
             m_IsPointerSelecting = true;
             m_PointerMouseButton = mouseButton;
             m_PointerAction = action;
-            m_PointerStartCursor = GetCursorPosition();
+            m_PointerStartCursor = cursorPosition;
             m_IsDragging = false;
             m_StrokeBlocks.Clear();
             m_StrokeBlockSet.Clear();
@@ -279,14 +337,59 @@ namespace Minecraft.PlayerControls
             }
         }
 
-        private void TryAppendPointerSample()
+        private bool TryGetMoveTarget(Vector2 cursorPosition, out Vector3Int moveTarget)
+        {
+            moveTarget = default;
+            if (m_Camera == null || m_PlayerEntity == null)
+            {
+                return false;
+            }
+
+            IWorld world = m_PlayerEntity.World;
+            if (world == null)
+            {
+                return false;
+            }
+
+            Ray ray = m_Camera.ScreenPointToRay(cursorPosition);
+            if (!Physics.RaycastBlock(ray, SelectionDistance, world, m_SurfaceRaycastFilter, out BlockRaycastHit hit))
+            {
+                return false;
+            }
+
+            // 优先使用命中面的邻接可走点，再回退到附近站位与最近可走点。
+            Vector3Int preferredNode = (hit.Position + hit.Normal).FloorToInt();
+            if (AStarPathfinding.IsWalkableNode(preferredNode, world))
+            {
+                moveTarget = preferredNode;
+                return true;
+            }
+
+            Vector3Int fallbackNode = FindNearbyStandPosition(hit.Position, world);
+            if (AStarPathfinding.IsWalkableNode(fallbackNode, world))
+            {
+                moveTarget = fallbackNode;
+                return true;
+            }
+
+            Vector3Int? nearestNode = AStarPathfinding.FindNearestWalkableNode(preferredNode, world, 8);
+            if (!nearestNode.HasValue)
+            {
+                return false;
+            }
+
+            moveTarget = nearestNode.Value;
+            return true;
+        }
+
+        private void TryAppendPointerSample(Vector2 cursorPosition)
         {
             if (!m_IsPointerSelecting || m_PointerAction == TargetSelectionAction.None)
             {
                 return;
             }
 
-            if (TryGetPointerSelectionBlock(m_PointerAction, out Vector3Int block))
+            if (TryGetPointerSelectionBlock(m_PointerAction, cursorPosition, out Vector3Int block))
             {
                 if (AppendStrokeBlock(block))
                 {
@@ -394,7 +497,7 @@ namespace Minecraft.PlayerControls
             return true;
         }
 
-        private bool TryGetPointerSelectionBlock(TargetSelectionAction action, out Vector3Int block)
+        private bool TryGetPointerSelectionBlock(TargetSelectionAction action, Vector2 cursorPosition, out Vector3Int block)
         {
             block = default;
             if (m_Camera == null || m_PlayerEntity == null)
@@ -408,7 +511,7 @@ namespace Minecraft.PlayerControls
                 return false;
             }
 
-            Ray ray = m_Camera.ScreenPointToRay(GetCursorPosition());
+            Ray ray = m_Camera.ScreenPointToRay(cursorPosition);
             if (!Physics.RaycastBlock(ray, SelectionDistance, world, m_SurfaceRaycastFilter, out BlockRaycastHit hit))
             {
                 return false;
@@ -599,15 +702,6 @@ namespace Minecraft.PlayerControls
             }
 
             return blockPos;
-        }
-
-        private Vector2 GetCursorPosition()
-        {
-            if (Cursor.lockState == CursorLockMode.Locked)
-            {
-                return Minecraft.UI.CursorReticle.MousePos + new Vector2(Screen.width / 2f, Screen.height/2);
-            }
-            return Input.mousePosition;
         }
 
         private bool SelectSurfaceRaycastFilter(Configurations.BlockData block)

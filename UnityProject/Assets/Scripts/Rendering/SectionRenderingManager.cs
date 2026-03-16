@@ -155,7 +155,11 @@ namespace Minecraft.Rendering
         private void CalculateSectionOffset()
         {
             Profiler.BeginSample("SectionRenderingManager.CalculateSectionOffset");
-            Vector3 player = m_World.PlayerTransform.position;
+            if (!TryGetPlayerPosition(out Vector3 player))
+            {
+                Profiler.EndSample();
+                return;
+            }
             ChunkPos playerChunk = ChunkPos.GetFromAny(player.x, player.z);
             m_SectionOffset = int3(playerChunk.X, 0, playerChunk.Z);
             Profiler.EndSample();
@@ -177,6 +181,31 @@ namespace Minecraft.Rendering
 
             job.ScheduleAppend(m_VisibleSectionIndices, m_Sections.Length, SectionCountInChunk).Complete();
             Profiler.EndSample();
+        }
+
+        private bool TryGetPlayerPosition(out Vector3 playerPosition)
+        {
+            playerPosition = default;
+            if (m_World == null)
+            {
+                return false;
+            }
+
+            Transform playerTransform = m_World.PlayerTransform;
+            if (playerTransform == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                playerPosition = playerTransform.position;
+                return true;
+            }
+            catch (MissingReferenceException)
+            {
+                return false;
+            }
         }
 
         private Mesh FindSectionMesh(int sectionIndex, out Vector3Int position)

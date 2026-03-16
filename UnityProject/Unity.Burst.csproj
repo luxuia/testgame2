@@ -83,8 +83,8 @@
     <Compile Include="Library\PackageCache\com.unity.burst@1.8.10\Runtime\Intrinsics\Arm\NEON_ctor.cs" />
     <Compile Include="Library\PackageCache\com.unity.burst@1.8.10\Runtime\SafeStringArrayHelper.cs" />
     <Compile Include="Library\PackageCache\com.unity.burst@1.8.10\Runtime\CompilerServices\SkipLocalsInitAttribute.cs" />
-    <Compile Include="Library\PackageCache\com.unity.burst@1.8.10\Runtime\Intrinsics\f16.cs" />
     <Compile Include="Library\PackageCache\com.unity.burst@1.8.10\Runtime\Editor\BurstReflection.cs" />
+    <Compile Include="Library\PackageCache\com.unity.burst@1.8.10\Runtime\Intrinsics\f16.cs" />
     <Compile Include="Library\PackageCache\com.unity.burst@1.8.10\Runtime\CompilerServices\IgnoreWarningAttribute.cs" />
     <Compile Include="Library\PackageCache\com.unity.burst@1.8.10\Runtime\Intrinsics\v64.cs" />
     <Compile Include="Library\PackageCache\com.unity.burst@1.8.10\Runtime\Intrinsics\SimdDebugViews.cs" />

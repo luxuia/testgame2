@@ -207,8 +207,8 @@
     <Compile Include="Library\PackageCache\com.unity.timeline@1.7.6\Editor\Animation\AnimationTrackActions.cs" />
     <Compile Include="Library\PackageCache\com.unity.timeline@1.7.6\Editor\Recording\TimelineRecording_PlayableAsset.cs" />
     <Compile Include="Library\PackageCache\com.unity.timeline@1.7.6\Editor\Animation\BindingTreeViewDataSource.cs" />
-    <Compile Include="Library\PackageCache\com.unity.timeline@1.7.6\Editor\treeview\Drawers\Layers\ItemsLayer.cs" />
     <Compile Include="Library\PackageCache\com.unity.timeline@1.7.6\Editor\Signals\TreeView\SignalReceiverItem.cs" />
+    <Compile Include="Library\PackageCache\com.unity.timeline@1.7.6\Editor\treeview\Drawers\Layers\ItemsLayer.cs" />
     <Compile Include="Library\PackageCache\com.unity.timeline@1.7.6\Editor\Recording\TimelineRecording_Monobehaviour.cs" />
     <Compile Include="Library\PackageCache\com.unity.timeline@1.7.6\Editor\Animation\CurveDataSource.cs" />
     <Compile Include="Library\PackageCache\com.unity.timeline@1.7.6\Editor\CustomEditors\MarkerEditor.cs" />

@@ -28,6 +28,7 @@ namespace Minecraft.PlayerControls
         [System.NonSerialized] private IAABBEntity m_PlayerEntity;
         [System.NonSerialized] private TargetSelector m_TargetSelector;
         [System.NonSerialized] private PathfindingMovementController m_MovementController;
+        [System.NonSerialized] private PlayerCommandRouter m_CommandRouter;
         [System.NonSerialized] private Camera m_Camera;
         [System.NonSerialized] private FighterAnimatorDriver m_FighterAnimator;
         [System.NonSerialized] private CombatRuntimeConfig m_CombatConfig;
@@ -65,8 +66,9 @@ namespace Minecraft.PlayerControls
 
             m_TargetSelector = GetComponent<TargetSelector>();
             m_MovementController = GetComponent<PathfindingMovementController>();
+            m_CommandRouter = ResolveCommandRouter();
 
-            m_TargetSelector.Initialize(camera, playerEntity);
+            m_TargetSelector.Initialize(camera, playerEntity, m_CommandRouter);
             m_MovementController.Initialize(playerEntity);
             if (playerEntity is PlayerEntity player)
             {
@@ -80,6 +82,7 @@ namespace Minecraft.PlayerControls
             InitializeCombatAnimationMapping();
 
             m_TargetSelector.OnTargetSelectedEvent += OnTargetSelected;
+            m_TargetSelector.OnMoveTargetSelectedEvent += OnMoveTargetSelected;
             m_TargetSelector.OnTargetClearedEvent += OnTargetCleared;
 
             m_TargetSelector.enabled = true;
@@ -90,6 +93,17 @@ namespace Minecraft.PlayerControls
             m_AlternateAttack = false;
             m_DiggingDamage = 0;
             m_CurrentDiggingTarget = Vector3Int.down;
+        }
+
+        private PlayerCommandRouter ResolveCommandRouter()
+        {
+            PlayerCommandRouter router = GetComponent<PlayerCommandRouter>();
+            if (router != null)
+            {
+                return router;
+            }
+
+            return PlayerCommandRouter.Resolve(this);
         }
 
         private void OnTargetSelected(Vector3Int target)
@@ -110,6 +124,15 @@ namespace Minecraft.PlayerControls
             m_CurrentDiggingTarget = Vector3Int.down;
             ShaderUtility.DigProgress = 0;
             ShaderUtility.TargetedBlockPosition = Vector3.down;
+        }
+
+        private void OnMoveTargetSelected(Vector3Int target)
+        {
+            m_DiggingDamage = 0;
+            m_CurrentDiggingTarget = Vector3Int.down;
+            ShaderUtility.DigProgress = 0;
+            ShaderUtility.TargetedBlockPosition = Vector3.down;
+            m_MovementController.SetMoveTarget(target);
         }
 
         private void Update()
@@ -323,13 +346,14 @@ namespace Minecraft.PlayerControls
             if (m_TargetSelector != null)
             {
                 m_TargetSelector.OnTargetSelectedEvent -= OnTargetSelected;
+                m_TargetSelector.OnMoveTargetSelectedEvent -= OnMoveTargetSelected;
                 m_TargetSelector.OnTargetClearedEvent -= OnTargetCleared;
             }
         }
 
         private void OnDrawGizmos()
         {
-            if (!ShowDebugInfo || !m_TargetSelector.SelectedTargetBlock.HasValue)
+            if (!ShowDebugInfo || m_TargetSelector == null || !m_TargetSelector.SelectedTargetBlock.HasValue)
             {
                 return;
             }

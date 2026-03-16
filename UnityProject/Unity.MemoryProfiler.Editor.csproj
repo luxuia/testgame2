@@ -126,9 +126,9 @@
     <Compile Include="Library\PackageCache\com.unity.memoryprofiler@1.1.0\Editor\UI\PathsToRoot\ManagedObjectInspectorItem.cs" />
     <Compile Include="Library\PackageCache\com.unity.memoryprofiler@1.1.0\Editor\UI\Analysis\Breakdowns\UnityObjects\UnityObjectsBreakdown\UnityObjectsBreakdownViewController.cs" />
     <Compile Include="Library\PackageCache\com.unity.memoryprofiler@1.1.0\Editor\UI\Analysis\Breakdowns\Shared\BreakdownDetailsViewControllerFactory.cs" />
-    <Compile Include="Library\PackageCache\com.unity.memoryprofiler@1.1.0\Editor\UI\Analysis\Breakdowns\Shared\Data\TreeModelUtility.cs" />
     <Compile Include="Library\PackageCache\com.unity.memoryprofiler@1.1.0\Editor\UI\Analysis\Breakdowns\Shared\Data\TreeModel.cs" />
     <Compile Include="Library\PackageCache\com.unity.memoryprofiler@1.1.0\Editor\UI\Analysis\Breakdowns\UnityObjects\UnityObjectsTable\UnityObjectsTableViewController.cs" />
+    <Compile Include="Library\PackageCache\com.unity.memoryprofiler@1.1.0\Editor\UI\Analysis\Breakdowns\Shared\Data\TreeModelUtility.cs" />
     <Compile Include="Library\PackageCache\com.unity.memoryprofiler@1.1.0\Editor\UI\Utilities\PlayerConnectionCompatibilityHelper.cs" />
     <Compile Include="Library\PackageCache\com.unity.memoryprofiler@1.1.0\Editor\MemorySnapshot\FileData\SnapshotFileModel.cs" />
     <Compile Include="Library\PackageCache\com.unity.memoryprofiler@1.1.0\Editor\UI\Analysis\Breakdowns\Summary\Data\UnityObjectsMemorySummaryModelBuilder.cs" />

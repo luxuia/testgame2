@@ -19,7 +19,7 @@ MonoBehaviour:
   RegroupFailureThreshold: 3
   StageMinStaySeconds: 1.2
   AttackRange: 1.9
-  BrainTickIntervalSec: 0.2
+  BrainTickIntervalSec: 0.5
   HomeTerritoryRadius: 24
   AllowAwayTerrainEdit: 0
   RepathProbeIntervalSec: 0.6

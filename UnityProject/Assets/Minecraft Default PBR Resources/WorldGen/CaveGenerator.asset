@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 88541cb0ce0e5934ab28077531935e7c, type: 3}
   m_Name: CaveGenerator
   m_EditorClassIdentifier: 
-  m_Range: 8
+  m_Range: 4
   m_AirBlock: air
   m_SandBlock: sand
   m_GravelBlock: gravel

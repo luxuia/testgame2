@@ -2,6 +2,7 @@ using Minecraft.Configurations;
 using Minecraft.Combat;
 using Minecraft.PlayerControls;
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
@@ -12,6 +13,7 @@ namespace Minecraft.Entities
     [RequireComponent(typeof(BlockInteraction))]
     [RequireComponent(typeof(FluidInteractor))]
     [RequireComponent(typeof(PlayerController))]
+    [RequireComponent(typeof(PlayerCommandRouter))]
     public class PlayerEntity : Entity
     {
         // ...fields of entity class
@@ -39,6 +41,10 @@ namespace Minecraft.Entities
         [SerializeField] private bool m_DestroyOnDespawn = true;
         [SerializeField] private bool m_SnapToGroundOnInitialize = true;
         [SerializeField] [Min(0f)] private float m_GroundSnapOffset = 0.05f;
+        [SerializeField] private bool m_RespawnOnDeath = true;
+        [SerializeField] [Min(0)] private int m_RespawnSearchRadius = 12;
+        [SerializeField] [Min(1)] private int m_RespawnHeadClearance = 2;
+        [SerializeField] private bool m_RespawnWithFullHealth = true;
 
         [Space]
 
@@ -68,6 +74,7 @@ namespace Minecraft.Entities
         private PlayerController m_PlayerController;
         private BlockInteraction m_BlockInteraction;
         private PathfindingMovementController m_PathfindingMovementController;
+        private PlayerCommandRouter m_CommandRouter;
 
         private Vector3 m_OriginalCameraPosition;
         private bool m_Jump;
@@ -86,6 +93,8 @@ namespace Minecraft.Entities
         [NonSerialized] private float m_DeathEnteredTime = -1f;
         [NonSerialized] private bool m_DeathControlLocked;
         [NonSerialized] private bool m_GroundSnapResolved;
+        [NonSerialized] private bool m_HasRespawnAnchor;
+        [NonSerialized] private Vector3 m_RespawnAnchorPosition;
 
         public CombatEntityRuntime CombatRuntime => m_CombatRuntime;
 
@@ -110,6 +119,7 @@ namespace Minecraft.Entities
             m_PlayerController = GetComponent<PlayerController>();
             m_BlockInteraction = GetComponent<BlockInteraction>();
             m_PathfindingMovementController = GetComponent<PathfindingMovementController>();
+            m_CommandRouter = GetComponent<PlayerCommandRouter>();
 
             m_FirstPersonLook.Initialize(m_Transform, m_CameraTransform, true);
             m_HeadBob.Initialize(m_CameraTransform);
@@ -141,6 +151,7 @@ namespace Minecraft.Entities
             ResolveCombatFeedbackIfNeeded();
             RefreshCombatFeedbackHealth();
             m_WasGroundedForAnimation = true;
+            CacheRespawnAnchor();
         }
 
         private void SwitchJumpMode(InputAction.CallbackContext context)
@@ -314,9 +325,7 @@ namespace Minecraft.Entities
                 {
                     AddInstantForce(new Vector3(0, JumpHeight * Mass / Time.fixedDeltaTime, 0));
                     PlayBlockStepSound(groundBlock);
-                    m_FighterAnimator?.PlayAction(Velocity.sqrMagnitude > 0.2f
-                        ? FighterAnimationAction.JumpForward
-                        : FighterAnimationAction.Jump);
+                    m_FighterAnimator?.PlayAction(FighterAnimationAction.Jump);
                     m_JumpConsumedWhileGrounded = true;
                 }
 
@@ -391,19 +400,55 @@ namespace Minecraft.Entities
 
         private void SwitchWalkAndRunMode()
         {
-            // TODO: 如何用 Input System 实现这个功能？
-            if (Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.UpArrow))
+            if (!TryEnsureCommandRouter())
             {
-                float currentTime = Time.time;
-
-                if (currentTime - m_LastTimePressW <= 0.2f)
-                {
-                    // 此时认为玩家双击了 W 或者 向上箭头
-                    m_IsRunning = true;
-                }
-
-                m_LastTimePressW = currentTime;
+                return;
             }
+
+            IReadOnlyList<PlayerCommand> frameCommands = m_CommandRouter.FrameCommands;
+            if (!ContainsCommand(frameCommands, PlayerCommandType.ForwardTap))
+            {
+                return;
+            }
+
+            // 在短时间窗口内连续前进输入，判定为奔跑触发。
+            float currentTime = Time.time;
+            if (currentTime - m_LastTimePressW <= 0.2f)
+            {
+                m_IsRunning = true;
+            }
+
+            m_LastTimePressW = currentTime;
+        }
+
+        private bool TryEnsureCommandRouter()
+        {
+            if (m_CommandRouter != null)
+            {
+                return true;
+            }
+
+            // 兜底从场景解析，确保运行时热替换/重建后仍可拿到统一输入路由。
+            m_CommandRouter = PlayerCommandRouter.Resolve(this);
+            return m_CommandRouter != null;
+        }
+
+        private static bool ContainsCommand(IReadOnlyList<PlayerCommand> commands, PlayerCommandType type)
+        {
+            if (commands == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < commands.Count; i++)
+            {
+                if (commands[i].Type == type)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private float GetInput(out Vector2 input)
@@ -605,6 +650,12 @@ namespace Minecraft.Entities
                 return;
             }
 
+            if (m_RespawnOnDeath)
+            {
+                RespawnAtSpawnPoint();
+                return;
+            }
+
             if (m_DestroyOnDespawn)
             {
                 Destroy(gameObject);
@@ -650,6 +701,222 @@ namespace Minecraft.Entities
             }
         }
 
+        private void RespawnAtSpawnPoint()
+        {
+            if (!m_HasRespawnAnchor)
+            {
+                CacheRespawnAnchor();
+            }
+
+            if (!TryResolveRespawnPosition(out Vector3 respawnPosition))
+            {
+                respawnPosition = m_HasRespawnAnchor ? m_RespawnAnchorPosition : m_Transform.position;
+            }
+
+            m_Transform.position = respawnPosition;
+            m_GroundSnapResolved = true;
+
+            float dt = Mathf.Max(Time.fixedDeltaTime, 0.0001f);
+            AddInstantForce(-Velocity * Mass / dt);
+
+            m_Jump = false;
+            m_FlyDown = false;
+            m_IsRunning = false;
+            m_PreviouslyGrounded = false;
+            m_JumpConsumedWhileGrounded = false;
+            m_WasGroundedForAnimation = true;
+            m_LastFungalFootprint = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
+            m_NextFungalFootprintTime = Time.time;
+
+            float maxHealth = Mathf.Max(1f, m_CombatMaxHealth);
+            float targetHealth = m_RespawnWithFullHealth
+                ? maxHealth
+                : Mathf.Clamp(m_CombatInitialHealth, 0f, maxHealth);
+            RebuildCombatRuntime(targetHealth);
+
+            UnlockControlsAfterRespawn();
+            ResolveFighterAnimatorIfNeeded();
+            m_FighterAnimator?.PlayAction(FighterAnimationAction.Revive);
+            SyncCombatRuntimePosition();
+            RefreshCombatFeedbackHealth();
+        }
+
+        private void UnlockControlsAfterRespawn()
+        {
+            m_DeathEnteredTime = -1f;
+            m_DeathControlLocked = false;
+
+            if (m_InputActions != null)
+            {
+                m_InputActions.Enable();
+            }
+
+            if (m_BlockInteraction != null)
+            {
+                m_BlockInteraction.enabled = true;
+            }
+
+            if (m_PathfindingMovementController != null)
+            {
+                m_PathfindingMovementController.ClearTarget();
+                m_PathfindingMovementController.enabled = true;
+            }
+
+            if (m_PlayerController != null)
+            {
+                m_PlayerController.CancelCurrentAction();
+                m_PlayerController.enabled = true;
+            }
+        }
+
+        private void RebuildCombatRuntime(float currentHealth)
+        {
+            UnbindCombatRuntimeEvents();
+
+            float maxHealth = Mathf.Max(1f, m_CombatMaxHealth);
+            m_CombatRuntime = new CombatEntityRuntime
+            {
+                RuntimeId = GetInstanceID(),
+                Role = CombatActorRole.Player,
+                DisplayName = gameObject.name,
+                MaxHealth = maxHealth,
+                CurrentHealth = Mathf.Clamp(currentHealth, 0f, maxHealth),
+                AttackPower = Mathf.Max(0f, m_CombatAttackPower),
+                Defense = Mathf.Max(0f, m_CombatDefense),
+                Position = Position,
+                LifecycleState = CombatLifecycleState.Alive,
+            };
+
+            BindCombatRuntimeEvents();
+        }
+
+        private void CacheRespawnAnchor()
+        {
+            m_RespawnAnchorPosition = m_Transform.position;
+            m_HasRespawnAnchor = true;
+        }
+
+        private bool TryResolveRespawnPosition(out Vector3 respawnPosition)
+        {
+            respawnPosition = m_HasRespawnAnchor ? m_RespawnAnchorPosition : m_Transform.position;
+
+            IWorld world = World;
+            if (!m_HasRespawnAnchor || world == null || !world.Initialized || world.RWAccessor == null)
+            {
+                return false;
+            }
+
+            int originX = Mathf.FloorToInt(m_RespawnAnchorPosition.x);
+            int originZ = Mathf.FloorToInt(m_RespawnAnchorPosition.z);
+            int searchRadius = Mathf.Max(0, m_RespawnSearchRadius);
+
+            bool found = false;
+            int bestScore = int.MaxValue;
+            Vector3 bestPosition = respawnPosition;
+            float feetOffset = Mathf.Max(0f, -BoundingBox.Min.y);
+
+            for (int dz = -searchRadius; dz <= searchRadius; dz++)
+            {
+                for (int dx = -searchRadius; dx <= searchRadius; dx++)
+                {
+                    int x = originX + dx;
+                    int z = originZ + dz;
+                    int topY = world.RWAccessor.GetTopVisibleBlockY(x, z, int.MinValue);
+                    if (topY == int.MinValue)
+                    {
+                        continue;
+                    }
+
+                    BlockData surface = world.RWAccessor.GetBlock(x, topY, z);
+                    if (!IsRespawnSurface(surface) || !HasRespawnHeadroom(world, x, topY, z))
+                    {
+                        continue;
+                    }
+
+                    int score = Mathf.Abs(dx) + Mathf.Abs(dz);
+                    if (score >= bestScore)
+                    {
+                        continue;
+                    }
+
+                    bestScore = score;
+                    bestPosition = new Vector3(
+                        x + 0.5f,
+                        topY + feetOffset + Mathf.Max(0f, m_GroundSnapOffset),
+                        z + 0.5f);
+                    found = true;
+                }
+            }
+
+            if (found)
+            {
+                respawnPosition = bestPosition;
+            }
+
+            return found;
+        }
+
+        private bool HasRespawnHeadroom(IWorld world, int x, int topY, int z)
+        {
+            int clearance = Mathf.Max(1, m_RespawnHeadClearance);
+            for (int y = 1; y <= clearance; y++)
+            {
+                BlockData blockAbove = world.RWAccessor.GetBlock(x, topY + y, z);
+                if (!IsAirLike(blockAbove))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool IsRespawnSurface(BlockData block)
+        {
+            if (block == null || block.PhysicState != PhysicSystem.PhysicState.Solid)
+            {
+                return false;
+            }
+
+            if (block.HasFlag(BlockFlags.IgnoreCollisions) || block.HasFlag(BlockFlags.AlwaysInvisible))
+            {
+                return false;
+            }
+
+            string name = block.InternalName ?? string.Empty;
+            return !name.Contains("water") && !name.Contains("lava");
+        }
+
+        private static bool IsAirLike(BlockData block)
+        {
+            if (block == null)
+            {
+                return false;
+            }
+
+            if (string.Equals(block.InternalName, "air", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (block.HasFlag(BlockFlags.AlwaysInvisible))
+            {
+                return true;
+            }
+
+            return block.HasFlag(BlockFlags.IgnoreCollisions) && !ContainsLiquidKeyword(block.InternalName);
+        }
+
+        private static bool ContainsLiquidKeyword(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                return false;
+            }
+
+            return name.Contains("water") || name.Contains("lava");
+        }
+
         private void ResolveFighterAnimatorIfNeeded()
         {
             if (m_FighterAnimator == null)
@@ -690,6 +957,8 @@ namespace Minecraft.Entities
                 m_CombatFeedback = gameObject.AddComponent<CombatFeedbackView>();
             }
 
+            // First-person player should not render a world-following overhead bar.
+            m_CombatFeedback?.SetHealthBarVisible(false);
             m_CombatFeedback?.EnsureInitialized();
         }
 
@@ -701,6 +970,7 @@ namespace Minecraft.Entities
             }
 
             ResolveCombatFeedbackIfNeeded();
+            m_CombatFeedback?.SetOverlayMeta(m_CombatRuntime.DisplayName);
             m_CombatFeedback?.SetHealth(m_CombatRuntime.CurrentHealth, m_CombatRuntime.MaxHealth);
         }
 
@@ -716,9 +986,7 @@ namespace Minecraft.Entities
 
             if (m_WasGroundedForAnimation && !isGrounded && worldVelocity.y > 0.25f)
             {
-                m_FighterAnimator.PlayAction(worldVelocity.sqrMagnitude > 0.2f
-                    ? FighterAnimationAction.JumpForward
-                    : FighterAnimationAction.Jump);
+                m_FighterAnimator.PlayAction(FighterAnimationAction.Jump);
             }
 
             m_WasGroundedForAnimation = isGrounded;

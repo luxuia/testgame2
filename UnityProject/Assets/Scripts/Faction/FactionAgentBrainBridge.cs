@@ -12,12 +12,72 @@ namespace Minecraft.Faction
     [RequireComponent(typeof(CrowdAgentController))]
     public sealed class FactionAgentBrainBridge : MonoBehaviour
     {
+        private const int ReachabilityChecksPerFrameBudget = 3;
+        private const float ReachabilityCacheTtlSec = 0.75f;
+        private const float ReachabilityNearDistanceSq = 12f * 12f;
+        private const float NavResolveCacheTtlSec = 0.35f;
+        private const int ReachabilityGridQuantize = 4;
+
         private enum StepExecutionStatus : byte
         {
             Running = 0,
             Succeeded = 1,
             Failed = 2,
         }
+
+        private readonly struct ReachabilityCacheKey : IEquatable<ReachabilityCacheKey>
+        {
+            public readonly int StartQx;
+            public readonly int StartQz;
+            public readonly int TargetQx;
+            public readonly int TargetQz;
+
+            public ReachabilityCacheKey(int startQx, int startQz, int targetQx, int targetQz)
+            {
+                StartQx = startQx;
+                StartQz = startQz;
+                TargetQx = targetQx;
+                TargetQz = targetQz;
+            }
+
+            public bool Equals(ReachabilityCacheKey other)
+            {
+                return StartQx == other.StartQx
+                       && StartQz == other.StartQz
+                       && TargetQx == other.TargetQx
+                       && TargetQz == other.TargetQz;
+            }
+
+            public override bool Equals(object obj)
+            {
+                return obj is ReachabilityCacheKey other && Equals(other);
+            }
+
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hashCode = StartQx;
+                    hashCode = (hashCode * 397) ^ StartQz;
+                    hashCode = (hashCode * 397) ^ TargetQx;
+                    hashCode = (hashCode * 397) ^ TargetQz;
+                    return hashCode;
+                }
+            }
+        }
+
+        private struct ReachabilityCacheEntry
+        {
+            public bool Reachable;
+            public float ExpireAtSec;
+        }
+
+        private static readonly Dictionary<ReachabilityCacheKey, ReachabilityCacheEntry> s_ReachabilityCache
+            = new Dictionary<ReachabilityCacheKey, ReachabilityCacheEntry>(256);
+        private static readonly List<ReachabilityCacheKey> s_ReachabilityCleanupBuffer
+            = new List<ReachabilityCacheKey>(64);
+        private static int s_ReachabilityBudgetFrame = -1;
+        private static int s_ReachabilityBudgetRemaining;
 
         private readonly List<GoapGoalDefinition> m_Goals = new List<GoapGoalDefinition>(6);
         private readonly List<GoapActionDefinition> m_Actions = new List<GoapActionDefinition>(16);
@@ -42,6 +102,10 @@ namespace Minecraft.Faction
         private float m_NextTargetProbeTime;
         private Vector3 m_LastObservedPosition;
         private float m_StalledSinceTime = -1f;
+        private Vector3Int m_LastRequestedNavTarget;
+        private Vector3Int m_LastResolvedNavTarget;
+        private float m_LastNavResolveTime = -1f;
+        private bool m_HasNavResolveCache;
 
         private Transform m_SelectedTarget;
         private bool m_SelectedPlayerTarget;
@@ -71,10 +135,20 @@ namespace Minecraft.Faction
             m_PlannerPreset = plannerPreset ?? new FactionGoapPlannerPreset();
             m_PlannerConfig = m_PlannerPreset.ToConfig();
             BuildGoapDefinitions();
-            m_NextBrainTickTime = 0f;
-            m_NextTargetProbeTime = 0f;
+            float brainInterval = m_ObjectivePreset != null
+                ? Mathf.Max(0.05f, m_ObjectivePreset.BrainTickIntervalSec)
+                : 0.2f;
+            float probeInterval = m_ObjectivePreset != null
+                ? Mathf.Max(0.1f, m_ObjectivePreset.RepathProbeIntervalSec)
+                : 0.6f;
+            m_NextBrainTickTime = Time.time + UnityEngine.Random.value * brainInterval;
+            m_NextTargetProbeTime = Time.time + UnityEngine.Random.value * probeInterval;
             ConsecutiveActionFailures = 0;
             m_LastFailureReason = null;
+            m_LastObservedPosition = transform.position;
+            m_StalledSinceTime = -1f;
+            m_HasNavResolveCache = false;
+            m_LastNavResolveTime = -1f;
         }
 
         public void SetDirective(in FactionRuntimeDirective directive)
@@ -212,25 +286,8 @@ namespace Minecraft.Faction
                 return;
             }
 
-            Vector3 target = m_SelectedTarget.position;
-            Vector3 toTarget = target - current;
-            toTarget.y = 0f;
-            if (toTarget.sqrMagnitude <= 0.0001f)
-            {
-                return;
-            }
-
-            float speed = Mathf.Max(1f, m_Agent.MoveSpeed * 0.65f);
-            current += toTarget.normalized * speed * Time.deltaTime;
-
-            float descendTargetY = target.y + m_Agent.PivotHeightFromFeet;
-            if (current.y > descendTargetY + 0.25f)
-            {
-                current.y = Mathf.MoveTowards(current.y, descendTargetY, Mathf.Max(1f, m_Agent.VerticalMoveSpeed) * Time.deltaTime);
-            }
-
-            transform.position = current;
-            m_Agent.CombatRuntime.Position = current;
+            SetNavigationTarget(m_SelectedTarget.position);
+            m_StalledSinceTime = Time.time;
         }
 
         private float DynamicGoalScorer(GoapGoalDefinition goal, IReadOnlyDictionary<FactKey, float> state)
@@ -358,8 +415,7 @@ namespace Minecraft.Faction
                 return StepExecutionStatus.Failed;
             }
 
-            Vector3Int target = ToGrid(m_SelectedTarget.position);
-            m_Agent.SetTarget(target);
+            SetNavigationTarget(m_SelectedTarget.position);
             if (IsWithinAttackRange(m_SelectedTarget.position))
             {
                 return StepExecutionStatus.Succeeded;
@@ -377,7 +433,7 @@ namespace Minecraft.Faction
                 return StepExecutionStatus.Failed;
             }
 
-            m_Agent.SetTarget(ToGrid(regroup.position));
+            SetNavigationTarget(regroup.position);
             if (Vector3.SqrMagnitude(regroup.position - transform.position) <= 1.25f * 1.25f)
             {
                 return StepExecutionStatus.Succeeded;
@@ -396,7 +452,7 @@ namespace Minecraft.Faction
 
             if (!IsWithinAttackRange(m_SelectedTarget.position))
             {
-                m_Agent.SetTarget(ToGrid(m_SelectedTarget.position));
+                SetNavigationTarget(m_SelectedTarget.position);
                 return StepExecutionStatus.Running;
             }
 
@@ -419,7 +475,10 @@ namespace Minecraft.Faction
                 return StepExecutionStatus.Failed;
             }
 
-            m_Agent?.PlayActionAnimation(result.AnimationActionName);
+            string actionName = !string.IsNullOrWhiteSpace(result.AnimationActionName)
+                ? result.AnimationActionName
+                : "Punch";
+            m_Agent?.PlayActionAnimation(actionName);
 
             return StepExecutionStatus.Succeeded;
         }
@@ -484,7 +543,7 @@ namespace Minecraft.Faction
 
             if (m_SelectedTarget != null)
             {
-                m_Agent.SetTarget(ToGrid(m_SelectedTarget.position));
+                SetNavigationTarget(m_SelectedTarget.position);
                 return;
             }
 
@@ -573,22 +632,46 @@ namespace Minecraft.Faction
 
             Vector3Int current = m_Agent.GetCurrentGridPosition();
             Vector3Int desired = ToGrid(target.position);
+            int dx = current.x - desired.x;
+            int dz = current.z - desired.z;
+            if (dx * dx + dz * dz <= ReachabilityNearDistanceSq)
+            {
+                return true;
+            }
+
+            ReachabilityCacheKey cacheKey = BuildReachabilityCacheKey(current, desired);
+            if (TryReadReachabilityCache(cacheKey, out bool cachedReachable))
+            {
+                return cachedReachable;
+            }
+
+            if (!TryConsumeReachabilityBudget())
+            {
+                // Prefer optimistic reachability under budget pressure to avoid frame spikes.
+                return true;
+            }
+
             int searchRadius = m_ObjectivePreset != null ? Mathf.Max(1, m_ObjectivePreset.ReachabilitySearchRadius) : 6;
             Vector3Int? start = AStarPathfinding.FindNearestWalkableNode(current, world, searchRadius);
             Vector3Int? end = AStarPathfinding.FindNearestWalkableNode(desired, world, searchRadius);
             if (!start.HasValue || !end.HasValue)
             {
+                WriteReachabilityCache(cacheKey, false);
                 return false;
             }
 
             if (start.Value == end.Value)
             {
+                WriteReachabilityCache(cacheKey, true);
                 return true;
             }
 
             int iterations = m_ObjectivePreset != null ? Mathf.Max(32, m_ObjectivePreset.ReachabilityIterations) : 180;
+            iterations = Mathf.Min(iterations, 96);
             List<Vector3Int> path = AStarPathfinding.FindPath(start.Value, end.Value, world, iterations);
-            return path != null && path.Count > 0;
+            bool reachable = path != null && path.Count > 0;
+            WriteReachabilityCache(cacheKey, reachable);
+            return reachable;
         }
 
         private CombatContext BuildCombatContext()
@@ -789,6 +872,135 @@ namespace Minecraft.Faction
 
             Vector3Int coreGrid = ToGrid(core.position);
             return $"core:{coreGrid.x},{coreGrid.y},{coreGrid.z}";
+        }
+
+        private void SetNavigationTarget(Vector3 desiredWorldPosition)
+        {
+            Vector3Int desired = ToGrid(desiredWorldPosition);
+
+            if (m_HasNavResolveCache
+                && desired == m_LastRequestedNavTarget
+                && Time.time - m_LastNavResolveTime <= NavResolveCacheTtlSec)
+            {
+                m_Agent.SetTarget(m_LastResolvedNavTarget);
+                return;
+            }
+
+            Vector3Int resolved = desired;
+            if (TryResolveNavigationTarget(desired, out Vector3Int walkable))
+            {
+                resolved = walkable;
+            }
+
+            m_LastRequestedNavTarget = desired;
+            m_LastResolvedNavTarget = resolved;
+            m_LastNavResolveTime = Time.time;
+            m_HasNavResolveCache = true;
+            m_Agent.SetTarget(resolved);
+        }
+
+        private bool TryResolveNavigationTarget(Vector3Int desired, out Vector3Int resolved)
+        {
+            IWorld world = World.Active;
+            if (world != null && world.Initialized)
+            {
+                if (!TryConsumeReachabilityBudget())
+                {
+                    resolved = desired;
+                    return false;
+                }
+
+                int searchRadius = m_ObjectivePreset != null ? Mathf.Max(1, m_ObjectivePreset.ReachabilitySearchRadius) : 6;
+                Vector3Int? walkable = AStarPathfinding.FindNearestWalkableNode(desired, world, searchRadius);
+                if (walkable.HasValue)
+                {
+                    resolved = walkable.Value;
+                    return true;
+                }
+            }
+
+            resolved = desired;
+            return false;
+        }
+
+        private static ReachabilityCacheKey BuildReachabilityCacheKey(Vector3Int current, Vector3Int desired)
+        {
+            int quantize = Mathf.Max(1, ReachabilityGridQuantize);
+            int startQx = Mathf.FloorToInt(current.x / (float)quantize);
+            int startQz = Mathf.FloorToInt(current.z / (float)quantize);
+            int targetQx = Mathf.FloorToInt(desired.x / (float)quantize);
+            int targetQz = Mathf.FloorToInt(desired.z / (float)quantize);
+            return new ReachabilityCacheKey(startQx, startQz, targetQx, targetQz);
+        }
+
+        private static bool TryReadReachabilityCache(ReachabilityCacheKey key, out bool reachable)
+        {
+            if (!s_ReachabilityCache.TryGetValue(key, out ReachabilityCacheEntry entry))
+            {
+                reachable = false;
+                return false;
+            }
+
+            float now = Time.time;
+            if (entry.ExpireAtSec < now)
+            {
+                s_ReachabilityCache.Remove(key);
+                reachable = false;
+                return false;
+            }
+
+            reachable = entry.Reachable;
+            return true;
+        }
+
+        private static void WriteReachabilityCache(ReachabilityCacheKey key, bool reachable)
+        {
+            float now = Time.time;
+            s_ReachabilityCache[key] = new ReachabilityCacheEntry
+            {
+                Reachable = reachable,
+                ExpireAtSec = now + ReachabilityCacheTtlSec,
+            };
+
+            if (s_ReachabilityCache.Count > 1024)
+            {
+                CleanupExpiredReachabilityCache(now);
+            }
+        }
+
+        private static void CleanupExpiredReachabilityCache(float now)
+        {
+            s_ReachabilityCleanupBuffer.Clear();
+            foreach (KeyValuePair<ReachabilityCacheKey, ReachabilityCacheEntry> pair in s_ReachabilityCache)
+            {
+                if (pair.Value.ExpireAtSec < now)
+                {
+                    s_ReachabilityCleanupBuffer.Add(pair.Key);
+                }
+            }
+
+            for (int i = 0; i < s_ReachabilityCleanupBuffer.Count; i++)
+            {
+                s_ReachabilityCache.Remove(s_ReachabilityCleanupBuffer[i]);
+            }
+        }
+
+        private static bool TryConsumeReachabilityBudget()
+        {
+            int frame = Time.frameCount;
+            if (s_ReachabilityBudgetFrame != frame)
+            {
+                s_ReachabilityBudgetFrame = frame;
+                s_ReachabilityBudgetRemaining = ReachabilityChecksPerFrameBudget;
+            }
+
+            if (s_ReachabilityBudgetRemaining <= 0)
+            {
+                return false;
+            }
+
+            s_ReachabilityBudgetRemaining--;
+            return true;
         }
 
         private static Vector3Int ToGrid(Vector3 worldPos)

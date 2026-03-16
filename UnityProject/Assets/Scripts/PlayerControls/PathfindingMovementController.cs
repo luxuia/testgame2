@@ -74,6 +74,7 @@ namespace Minecraft.PlayerControls
         [System.NonSerialized] private Vector3 m_TargetDirection;
         [System.NonSerialized] private bool m_HasDirection;
         [System.NonSerialized] private bool m_HasVerticalMovement;
+        [System.NonSerialized] private bool m_StopAtAttackRange;
         [System.NonSerialized] private Vector3 m_LastStuckCheckPos;
         [System.NonSerialized] private float m_LastStuckCheckTime;
         [System.NonSerialized] private float m_LastRepathTime;
@@ -97,6 +98,7 @@ namespace Minecraft.PlayerControls
             m_HasDirection = false;
             m_TargetDirection = Vector3.zero;
             m_HasVerticalMovement = false;
+            m_StopAtAttackRange = true;
             m_LastStuckCheckPos = transform.position;
             m_LastStuckCheckTime = Time.time;
             m_LastRepathTime = -999f;
@@ -124,7 +126,8 @@ namespace Minecraft.PlayerControls
             {
                 m_TargetMarker = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 m_TargetMarker.name = "TargetMarker";
-                m_TargetMarker.transform.SetParent(transform);
+                // Keep marker in world space so it stays on target tile instead of following the player.
+                m_TargetMarker.transform.SetParent(null, true);
                 m_TargetMarker.transform.localScale = Vector3.one * 0.3f;
 
                 var col = m_TargetMarker.GetComponent<Collider>();
@@ -149,18 +152,33 @@ namespace Minecraft.PlayerControls
         /// </summary>
         public void SetTarget(Vector3Int targetBlock, Vector3Int? attackCheckBlock = null)
         {
+            SetTargetInternal(targetBlock, attackCheckBlock ?? targetBlock, true);
+        }
+
+        /// <summary>
+        /// 设置纯移动目标（不触发攻击距离提前停下）
+        /// </summary>
+        public void SetMoveTarget(Vector3Int targetBlock)
+        {
+            SetTargetInternal(targetBlock, null, false);
+        }
+
+        private void SetTargetInternal(Vector3Int targetBlock, Vector3Int? attackCheckBlock, bool stopAtAttackRange)
+        {
             if (m_HasTarget &&
                 m_TargetBlock.HasValue &&
                 m_TargetBlock.Value == targetBlock &&
+                m_StopAtAttackRange == stopAtAttackRange &&
+                m_AttackCheckBlock == attackCheckBlock &&
                 m_CurrentPath != null &&
                 m_CurrentPathIndex < m_CurrentPath.Count)
             {
-                m_AttackCheckBlock = attackCheckBlock ?? targetBlock;
                 return;
             }
 
             m_TargetBlock = targetBlock;
-            m_AttackCheckBlock = attackCheckBlock ?? targetBlock;
+            m_AttackCheckBlock = attackCheckBlock;
+            m_StopAtAttackRange = stopAtAttackRange;
             m_HasTarget = true;
 
             Vector3Int startPos = GetPlayerGridPosition();
@@ -222,6 +240,7 @@ namespace Minecraft.PlayerControls
             StopMovement();
             m_TargetBlock = null;
             m_AttackCheckBlock = null;
+            m_StopAtAttackRange = true;
             m_HasTarget = false;
         }
 
@@ -285,7 +304,7 @@ namespace Minecraft.PlayerControls
                 transform.rotation = Quaternion.LookRotation(horizontalDir);
             }
 
-            if (m_AttackCheckBlock.HasValue && IsInAttackRange(m_AttackCheckBlock.Value))
+            if (m_StopAtAttackRange && m_AttackCheckBlock.HasValue && IsInAttackRange(m_AttackCheckBlock.Value))
             {
                 OnReachedAttackRange();
             }

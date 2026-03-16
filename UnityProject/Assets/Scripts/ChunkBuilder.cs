@@ -68,9 +68,36 @@ namespace Minecraft
         {
             if (m_World != null)
             {
-                Vector3 playerPos = m_World.PlayerTransform.position;
-                Interlocked.Exchange(ref m_PlayerX, playerPos.x);
-                Interlocked.Exchange(ref m_PlayerZ, playerPos.z);
+                if (TryGetPlayerPosition(out Vector3 playerPos))
+                {
+                    Interlocked.Exchange(ref m_PlayerX, playerPos.x);
+                    Interlocked.Exchange(ref m_PlayerZ, playerPos.z);
+                }
+            }
+        }
+
+        private bool TryGetPlayerPosition(out Vector3 playerPosition)
+        {
+            playerPosition = default;
+            if (m_World == null)
+            {
+                return false;
+            }
+
+            Transform playerTransform = m_World.PlayerTransform;
+            if (playerTransform == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                playerPosition = playerTransform.position;
+                return true;
+            }
+            catch (MissingReferenceException)
+            {
+                return false;
             }
         }
 

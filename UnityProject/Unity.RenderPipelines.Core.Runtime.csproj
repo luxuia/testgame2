@@ -172,8 +172,8 @@
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Runtime\Utilities\TileLayoutUtils.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Runtime\PostProcessing\LensFlareCommonSRP.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Runtime\Utilities\CoreUtils.cs" />
-    <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Runtime\Common\ComponentSingleton.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Runtime\Debugging\DebugShapes.cs" />
+    <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Runtime\Common\ComponentSingleton.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Runtime\Common\RemoveRange.Extensions.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Runtime\RenderPipeline\IVolumetricCloud.cs" />
     <Compile Include="Library\PackageCache\com.unity.render-pipelines.core@14.0.9\Runtime\Debugging\DebugUI.Panel.cs" />

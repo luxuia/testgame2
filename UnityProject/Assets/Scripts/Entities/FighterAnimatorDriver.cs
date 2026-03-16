@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -59,113 +58,50 @@ namespace Minecraft.Entities
         [Header("References")]
         [SerializeField] private Animator m_Animator;
 
-        [Header("Locomotion Tuning")]
+        [Header("Simple Controller")]
+        [SerializeField] [Min(0.01f)] private float m_CrossFadeDuration = 0.08f;
         [SerializeField] [Min(0.01f)] private float m_MinMoveSpeed = 0.05f;
-        [SerializeField] [Range(0f, 1f)] private float m_StrafeThreshold = 0.2f;
-        [SerializeField] [Range(0f, 1f)] private float m_ForwardThreshold = 0.25f;
-
-        [Header("Action Timing")]
         [SerializeField] [Min(0f)] private float m_MinActionInterval = 0.06f;
-        [SerializeField] [Min(0f)] private float m_InAirDelay = 0.25f;
-        [SerializeField] [Min(0.01f)] private float m_InAirDuration = 0.5f;
+        [SerializeField] [Min(0f)] private float m_LocomotionResumeDelay = 0.18f;
 
-        [Header("Animator Parameters")]
-        [SerializeField] private string m_RunParam = "Run";
-        [SerializeField] private string m_WalkForwardParam = "Walk Forward";
-        [SerializeField] private string m_WalkBackwardParam = "Walk Backward";
-        [SerializeField] private string m_WalkLeftParam = "WalkLeft";
-        [SerializeField] private string m_WalkRightParam = "WalkRight";
-        [SerializeField] private string m_WalkSlowParam = "WalkSlow";
-        [SerializeField] private string m_BlockParam = "Block";
-        [SerializeField] private string m_CrouchParam = "Crouch";
-        [SerializeField] private string m_InAirParam = "InAir";
+        [Header("State Names")]
+        [SerializeField] private string m_BaseLayerName = "Base Layer";
+        [SerializeField] private string m_HitLayerName = "hit";
+        [SerializeField] private string m_IdleStateName = "Idle";
+        [SerializeField] private string m_RunStateName = "Run";
+        [SerializeField] private string m_LightHitStateName = "LightHit";
+        [SerializeField] private string m_BlockHitStateName = "BlockHitReact";
+        [SerializeField] private string m_CrouchBlockHitStateName = "BlockHitReact";
+        [SerializeField] private string m_JumpHitStateName = "Stunned";
 
-        private static readonly Dictionary<FighterAnimationAction, string> s_ActionTriggers = new Dictionary<FighterAnimationAction, string>
-        {
-            { FighterAnimationAction.DashForward, "DashForwardTrigger" },
-            { FighterAnimationAction.DashBackward, "DashBackwardTrigger" },
-            { FighterAnimationAction.DashLeft, "DashLeftTrigger" },
-            { FighterAnimationAction.DashRight, "DashRightTrigger" },
-            { FighterAnimationAction.Intro1, "Intro1Trigger" },
-            { FighterAnimationAction.Intro2, "Intro2Trigger" },
-            { FighterAnimationAction.Victory1, "Victory1Trigger" },
-            { FighterAnimationAction.Victory2, "Victory2Trigger" },
-            { FighterAnimationAction.Uppercut, "UppercutTrigger" },
-            { FighterAnimationAction.Punch, "PunchTrigger" },
-            { FighterAnimationAction.HeavySmash, "HeavySmashTrigger" },
-            { FighterAnimationAction.SmashCombo, "SmashComboTrigger" },
-            { FighterAnimationAction.Combo1, "Combo1Trigger" },
-            { FighterAnimationAction.ForwardSmash, "ForwardSmashTrigger" },
-            { FighterAnimationAction.Jab, "JabTrigger" },
-            { FighterAnimationAction.Kick, "KickTrigger" },
-            { FighterAnimationAction.AxeKick, "AxeKickTrigger" },
-            { FighterAnimationAction.BlockHitReact, "BlockHitReactTrigger" },
-            { FighterAnimationAction.BlockBreak, "BlockBreakTrigger" },
-            { FighterAnimationAction.CrouchBlockHitReact, "CrouchBlockHitReactTrigger" },
-            { FighterAnimationAction.LightHit, "LightHitTrigger" },
-            { FighterAnimationAction.Knockdown, "KnockdownTrigger" },
-            { FighterAnimationAction.Choke, "Choke" },
-            { FighterAnimationAction.LowKick, "LowKickTrigger" },
-            { FighterAnimationAction.Sweep, "SweepTrigger" },
-            { FighterAnimationAction.DownSmash, "DownSmashTrigger" },
-            { FighterAnimationAction.LowPunch, "LowPunchTrigger" },
-            { FighterAnimationAction.Jump, "JumpTrigger" },
-            { FighterAnimationAction.JumpForward, "JumpForwardTrigger" },
-            { FighterAnimationAction.JumpBackward, "JumpBackwardTrigger" },
-            { FighterAnimationAction.HighPunch, "HighPunchTrigger" },
-            { FighterAnimationAction.HighSmash, "HighSmashTrigger" },
-            { FighterAnimationAction.JumpHitReact, "JumpHitReactTrigger" },
-            { FighterAnimationAction.HighKick, "HighKickTrigger" },
-            { FighterAnimationAction.RollForward, "RollForwardTrigger" },
-            { FighterAnimationAction.RollBackward, "RollBackwardTrigger" },
-            { FighterAnimationAction.RangeAttack1, "RangeAttack1Trigger" },
-            { FighterAnimationAction.RangeAttack2, "RangeAttack2Trigger" },
-            { FighterAnimationAction.MoveAttack1, "MoveAttack1Trigger" },
-            { FighterAnimationAction.MoveAttack2, "MoveAttack2Trigger" },
-            { FighterAnimationAction.SpecialAttack1, "SpecialAttack1Trigger" },
-            { FighterAnimationAction.SpecialAttack2, "SpecialAttack2Trigger" },
-            { FighterAnimationAction.Death, "DeathTrigger" },
-            { FighterAnimationAction.Revive, "ReviveTrigger" },
-        };
+        [Header("Hit Layer")]
+        [SerializeField] [Min(0f)] private float m_HitActionCooldown = 0.5f;
+        [SerializeField] [Range(0f, 1f)] private float m_HitLayerPlayWeight = 1f;
+        [SerializeField] [Min(0.01f)] private float m_HitLayerActiveDuration = 0.32f;
+        [SerializeField] [Min(0.01f)] private float m_HitLayerWeightLerpSpeed = 10f;
 
         private static readonly Dictionary<string, FighterAnimationAction> s_NameToAction = BuildActionLookup();
-        private static readonly Dictionary<FighterAnimationAction, string[]> s_ImmediateStatePaths = new Dictionary<FighterAnimationAction, string[]>
+        private static readonly HashSet<FighterAnimationAction> s_HitActions = new HashSet<FighterAnimationAction>
         {
-            {
-                FighterAnimationAction.Jump,
-                new[]
-                {
-                    "Base Layer.Jumps.Jump",
-                    "Base Layer.InAir.Jump",
-                    "Base Layer.Jump",
-                }
-            },
-            {
-                FighterAnimationAction.JumpForward,
-                new[]
-                {
-                    "Base Layer.Jumps.JumpForward",
-                    "Base Layer.InAir.JumpForward",
-                    "Base Layer.JumpForward",
-                }
-            },
-            {
-                FighterAnimationAction.JumpBackward,
-                new[]
-                {
-                    "Base Layer.Jumps.JumpBackward",
-                    "Base Layer.InAir.JumpBackward",
-                    "Base Layer.JumpBackward",
-                }
-            },
+            FighterAnimationAction.LightHit,
+            FighterAnimationAction.BlockHitReact,
+            FighterAnimationAction.CrouchBlockHitReact,
+            FighterAnimationAction.JumpHitReact,
         };
 
         private float m_LastActionTime = -999f;
+        private float m_LastHitActionTime = -999f;
+        private float m_LocomotionLockedUntil = -999f;
         private bool m_Blocking;
         private bool m_Crouching;
         private bool m_Dead;
-        private bool m_InAir;
-        private Coroutine m_InAirCoroutine;
+        private bool m_IsGrounded = true;
+        private int m_BaseLayerIndex = -1;
+        private int m_HitLayerIndex = -1;
+        private string m_CurrentBaseState;
+        private readonly HashSet<string> m_ReportedMissingStates = new HashSet<string>(StringComparer.Ordinal);
+        private float m_HitLayerActiveUntil = -999f;
+        private float m_CurrentHitLayerWeight;
 
         public Animator Animator => m_Animator;
         public bool IsDead => m_Dead;
@@ -176,6 +112,11 @@ namespace Minecraft.Entities
             SyncStanceBools();
         }
 
+        private void LateUpdate()
+        {
+            TickHitLayerWeight();
+        }
+
         public bool TryInitialize(Animator explicitAnimator = null)
         {
             if (explicitAnimator != null)
@@ -183,30 +124,28 @@ namespace Minecraft.Entities
                 m_Animator = explicitAnimator;
             }
 
-            return ResolveAnimatorIfNeeded();
+            if (!ResolveAnimatorIfNeeded())
+            {
+                return false;
+            }
+
+            ResolveLayerIndices();
+            return true;
         }
 
         public void SetBlock(bool value)
         {
             m_Blocking = value;
-            if (!string.IsNullOrEmpty(m_BlockParam) && m_Animator != null)
-            {
-                m_Animator.SetBool(m_BlockParam, m_Blocking);
-            }
         }
 
         public void SetCrouch(bool value)
         {
             m_Crouching = value;
-            if (!string.IsNullOrEmpty(m_CrouchParam) && m_Animator != null)
-            {
-                m_Animator.SetBool(m_CrouchParam, m_Crouching);
-            }
         }
 
         public void SetGroundedState(bool isGrounded)
         {
-            SetInAir(!isGrounded);
+            m_IsGrounded = isGrounded;
         }
 
         public void UpdateLocomotion(Vector3 worldVelocity, Transform reference, bool runRequested)
@@ -218,57 +157,33 @@ namespace Minecraft.Entities
 
             if (m_Dead)
             {
-                SetLocomotion(false, false, false, false, false, false);
                 return;
             }
 
             _ = reference;
-            _ = runRequested;
+            _ = runRequested; // runRequested is intentionally ignored in simple crossfade mode.
+
+            if (Time.time < m_LocomotionLockedUntil)
+            {
+                return;
+            }
+
+            if (m_Blocking || m_Crouching)
+            {
+                TryCrossFadeBaseState(m_IdleStateName);
+                return;
+            }
+
+            if (!m_IsGrounded)
+            {
+                return;
+            }
 
             Vector3 planarVelocity = worldVelocity;
             planarVelocity.y = 0f;
             float speed = planarVelocity.magnitude;
-            bool moving = speed > m_MinMoveSpeed && !m_Blocking && !m_Crouching;
-
-            bool run = false;
-            bool walkForward = false;
-            bool walkBackward = false;
-            bool walkLeft = false;
-            bool walkRight = false;
-            bool walkSlow = false;
-
-            if (moving)
-            {
-                Vector3 localDirection = transform.InverseTransformDirection(planarVelocity / speed);
-                bool directionMismatched = localDirection.z < 1f - m_ForwardThreshold;
-
-                if (!directionMismatched)
-                {
-                    run = true;
-                }
-                else
-                {
-                    float absX = Mathf.Abs(localDirection.x);
-                    float absZ = Mathf.Abs(localDirection.z);
-
-                    if (absX < m_StrafeThreshold && absZ < m_ForwardThreshold)
-                    {
-                        walkSlow = true;
-                    }
-                    else if (absZ >= absX)
-                    {
-                        walkForward = localDirection.z >= 0f;
-                        walkBackward = !walkForward;
-                    }
-                    else
-                    {
-                        walkRight = localDirection.x >= 0f;
-                        walkLeft = !walkRight;
-                    }
-                }
-            }
-
-            SetLocomotion(run, walkForward, walkBackward, walkLeft, walkRight, walkSlow);
+            string desiredState = speed > m_MinMoveSpeed ? m_RunStateName : m_IdleStateName;
+            TryCrossFadeBaseState(desiredState);
         }
 
         public bool PlayAction(FighterAnimationAction action)
@@ -283,158 +198,152 @@ namespace Minecraft.Entities
                 return false;
             }
 
-            if (!s_ActionTriggers.TryGetValue(action, out string triggerName) || string.IsNullOrEmpty(triggerName))
+            if (s_HitActions.Contains(action))
             {
+                return TryPlayHitAction(action);
+            }
+
+            string stateName = ResolveActionStateName(action);
+            if (string.IsNullOrWhiteSpace(stateName))
+            {
+                Debug.LogError($"[FighterAnimatorDriver] Empty mapped state for action '{action}' on '{name}'.", this);
                 return false;
             }
 
-            if (IsJumpAction(action))
+            if (TryCrossFadeBaseState(stateName, force: true))
             {
-                // Clear locomotion booleans first so jump can interrupt locomotion immediately.
-                SetLocomotion(false, false, false, false, false, false);
-                if (TryCrossFadeToActionState(action))
+                m_LastActionTime = Time.time;
+                if (action == FighterAnimationAction.Death)
                 {
-                    m_LastActionTime = Time.time;
-                    StartInAirWindow();
-                    return true;
+                    m_Dead = true;
+                    m_LocomotionLockedUntil = float.MaxValue;
                 }
+                else if (action == FighterAnimationAction.Revive)
+                {
+                    m_Dead = false;
+                    m_LocomotionLockedUntil = Time.time + Mathf.Max(0f, m_LocomotionResumeDelay);
+                }
+                else
+                {
+                    m_LocomotionLockedUntil = Time.time + Mathf.Max(0f, m_LocomotionResumeDelay);
+                }
+
+                return true;
             }
 
-            m_Animator.SetTrigger(triggerName);
-            m_LastActionTime = Time.time;
-
-            if (action == FighterAnimationAction.Death)
-            {
-                m_Dead = true;
-            }
-            else if (action == FighterAnimationAction.Revive)
-            {
-                m_Dead = false;
-            }
-
-            if (action == FighterAnimationAction.Jump ||
-                action == FighterAnimationAction.JumpForward ||
-                action == FighterAnimationAction.JumpBackward)
-            {
-                StartInAirWindow();
-            }
-
-            if (m_Dead)
-            {
-                SetLocomotion(false, false, false, false, false, false);
-            }
-
-            return true;
+            Debug.LogError($"[FighterAnimatorDriver] Missing base state '{stateName}' for action '{action}' on '{name}'.", this);
+            return false;
         }
 
         public bool PlayActionByName(string actionName)
         {
             if (string.IsNullOrWhiteSpace(actionName))
             {
+                Debug.LogError($"[FighterAnimatorDriver] Empty action name on '{name}'.", this);
                 return false;
             }
 
             string normalized = NormalizeActionName(actionName);
             if (!s_NameToAction.TryGetValue(normalized, out FighterAnimationAction action))
             {
+                Debug.LogError($"[FighterAnimatorDriver] Unknown action name '{actionName}' on '{name}'.", this);
                 return false;
             }
 
             return PlayAction(action);
         }
 
-        private static bool IsJumpAction(FighterAnimationAction action)
+        private bool TryPlayHitAction(FighterAnimationAction action)
         {
-            return action == FighterAnimationAction.Jump ||
-                   action == FighterAnimationAction.JumpForward ||
-                   action == FighterAnimationAction.JumpBackward;
-        }
-
-        private bool TryCrossFadeToActionState(FighterAnimationAction action)
-        {
-            if (m_Animator == null ||
-                !s_ImmediateStatePaths.TryGetValue(action, out string[] statePaths) ||
-                statePaths == null)
+            if (Time.time - m_LastHitActionTime < Mathf.Max(0f, m_HitActionCooldown))
             {
                 return false;
             }
 
-            for (int i = 0; i < statePaths.Length; i++)
+            string stateName = ResolveHitStateName(action);
+            if (string.IsNullOrWhiteSpace(stateName))
             {
-                string statePath = statePaths[i];
-                if (string.IsNullOrEmpty(statePath))
-                {
-                    continue;
-                }
+                Debug.LogError($"[FighterAnimatorDriver] Empty hit state for action '{action}' on '{name}'.", this);
+                return false;
+            }
 
-                int fullPathHash = Animator.StringToHash(statePath);
-                if (!m_Animator.HasState(0, fullPathHash))
-                {
-                    continue;
-                }
+            if (!TryCrossFadeHitState(stateName))
+            {
+                Debug.LogError($"[FighterAnimatorDriver] Missing hit state '{stateName}' for action '{action}' on '{name}'.", this);
+                return false;
+            }
 
-                m_Animator.CrossFadeInFixedTime(fullPathHash, 0.03f, 0, 0f);
+            m_LastHitActionTime = Time.time;
+            m_LastActionTime = Time.time;
+            m_HitLayerActiveUntil = Time.time + Mathf.Max(0.01f, m_HitLayerActiveDuration);
+            TickHitLayerWeight(force: true);
+            return true;
+        }
+
+        private string ResolveHitStateName(FighterAnimationAction action)
+        {
+            return action switch
+            {
+                FighterAnimationAction.LightHit => m_LightHitStateName,
+                FighterAnimationAction.BlockHitReact => m_BlockHitStateName,
+                FighterAnimationAction.CrouchBlockHitReact => m_CrouchBlockHitStateName,
+                FighterAnimationAction.JumpHitReact => m_JumpHitStateName,
+                _ => m_BlockHitStateName,
+            };
+        }
+
+        private bool TryCrossFadeBaseState(string stateName, bool force = false)
+        {
+            if (string.IsNullOrWhiteSpace(stateName) || m_BaseLayerIndex < 0)
+            {
+                return false;
+            }
+
+            if (!force &&
+                !string.IsNullOrEmpty(m_CurrentBaseState) &&
+                string.Equals(m_CurrentBaseState, stateName, StringComparison.Ordinal))
+            {
                 return true;
             }
 
-            return false;
-        }
-
-        private void StartInAirWindow()
-        {
-            if (m_InAirCoroutine != null)
+            if (!TryCrossFadeState(m_BaseLayerIndex, stateName))
             {
-                StopCoroutine(m_InAirCoroutine);
+                return false;
             }
 
-            m_InAirCoroutine = StartCoroutine(CoInAirWindow());
+            m_CurrentBaseState = stateName;
+            return true;
         }
 
-        private IEnumerator CoInAirWindow()
+        private bool TryCrossFadeHitState(string stateName)
         {
-            if (m_InAirDelay > 0f)
+            if (m_HitLayerIndex < 0)
             {
-                yield return new WaitForSeconds(m_InAirDelay);
+                Debug.LogError($"[FighterAnimatorDriver] Missing hit layer '{m_HitLayerName}' on '{name}'.", this);
+                return false;
             }
 
-            SetInAir(true);
-
-            if (m_InAirDuration > 0f)
-            {
-                yield return new WaitForSeconds(m_InAirDuration);
-            }
-
-            SetInAir(false);
-            m_InAirCoroutine = null;
+            return TryCrossFadeState(m_HitLayerIndex, stateName);
         }
 
-        private void SetInAir(bool value)
+        private bool TryCrossFadeState(int layerIndex, string stateName)
         {
-            m_InAir = value;
-            if (!string.IsNullOrEmpty(m_InAirParam) && m_Animator != null)
+            if (m_Animator == null || layerIndex < 0 || string.IsNullOrWhiteSpace(stateName))
             {
-                m_Animator.SetBool(m_InAirParam, m_InAir);
-            }
-        }
-
-        private void SetLocomotion(bool run, bool walkForward, bool walkBackward, bool walkLeft, bool walkRight, bool walkSlow)
-        {
-            SetBool(m_RunParam, run);
-            SetBool(m_WalkForwardParam, walkForward);
-            SetBool(m_WalkBackwardParam, walkBackward);
-            SetBool(m_WalkLeftParam, walkLeft);
-            SetBool(m_WalkRightParam, walkRight);
-            SetBool(m_WalkSlowParam, walkSlow);
-        }
-
-        private void SetBool(string param, bool value)
-        {
-            if (string.IsNullOrEmpty(param) || m_Animator == null)
-            {
-                return;
+                return false;
             }
 
-            m_Animator.SetBool(param, value);
+            string layerName = layerIndex == m_BaseLayerIndex ? m_BaseLayerName : m_HitLayerName;
+            string fullPath = $"{layerName}.{stateName}";
+            int fullPathHash = Animator.StringToHash(fullPath);
+            if (!m_Animator.HasState(layerIndex, fullPathHash))
+            {
+                ReportMissingStateOnce(layerName, stateName, fullPath);
+                return false;
+            }
+
+            m_Animator.CrossFadeInFixedTime(fullPathHash, Mathf.Max(0.01f, m_CrossFadeDuration), layerIndex, 0f);
+            return true;
         }
 
         private bool ResolveAnimatorIfNeeded()
@@ -453,11 +362,36 @@ namespace Minecraft.Entities
             return m_Animator != null;
         }
 
+        private void ResolveLayerIndices()
+        {
+            if (m_Animator == null)
+            {
+                m_BaseLayerIndex = -1;
+                m_HitLayerIndex = -1;
+                return;
+            }
+
+            m_BaseLayerIndex = m_Animator.GetLayerIndex(m_BaseLayerName);
+            if (m_BaseLayerIndex < 0)
+            {
+                m_BaseLayerIndex = 0;
+                Debug.LogError($"[FighterAnimatorDriver] Base layer '{m_BaseLayerName}' not found on '{name}'. Fallback to layer 0.", this);
+            }
+
+            m_HitLayerIndex = m_Animator.GetLayerIndex(m_HitLayerName);
+
+            m_Animator.SetLayerWeight(m_BaseLayerIndex, 1f);
+            if (m_HitLayerIndex >= 0)
+            {
+                m_CurrentHitLayerWeight = 0f;
+                m_Animator.SetLayerWeight(m_HitLayerIndex, 0f);
+            }
+        }
+
         private void SyncStanceBools()
         {
-            SetBlock(m_Blocking);
-            SetCrouch(m_Crouching);
-            SetInAir(m_InAir);
+            _ = m_Blocking;
+            _ = m_Crouching;
         }
 
         private static Dictionary<string, FighterAnimationAction> BuildActionLookup()
@@ -479,6 +413,46 @@ namespace Minecraft.Entities
                 .Replace(" ", string.Empty)
                 .Trim()
                 .ToLowerInvariant();
+        }
+
+        private static string ResolveActionStateName(FighterAnimationAction action)
+        {
+            return action.ToString();
+        }
+
+        private void ReportMissingStateOnce(string layerName, string stateName, string fullPath)
+        {
+            string key = $"{layerName}:{stateName}";
+            if (m_ReportedMissingStates.Add(key))
+            {
+                Debug.LogError(
+                    $"[FighterAnimatorDriver] Animator state '{fullPath}' not found on '{name}'.",
+                    this);
+            }
+        }
+
+        private void TickHitLayerWeight(bool force = false)
+        {
+            if (m_Animator == null || m_HitLayerIndex < 0)
+            {
+                return;
+            }
+
+            float targetWeight = Time.time <= m_HitLayerActiveUntil
+                ? Mathf.Clamp01(m_HitLayerPlayWeight)
+                : 0f;
+            float lerpSpeed = Mathf.Max(0.01f, m_HitLayerWeightLerpSpeed);
+            float nextWeight = force
+                ? targetWeight
+                : Mathf.MoveTowards(m_CurrentHitLayerWeight, targetWeight, lerpSpeed * Time.deltaTime);
+
+            if (!force && Mathf.Abs(nextWeight - m_CurrentHitLayerWeight) <= 0.0001f)
+            {
+                return;
+            }
+
+            m_CurrentHitLayerWeight = nextWeight;
+            m_Animator.SetLayerWeight(m_HitLayerIndex, m_CurrentHitLayerWeight);
         }
     }
 }

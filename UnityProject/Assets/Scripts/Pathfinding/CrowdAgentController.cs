@@ -108,12 +108,29 @@ namespace Minecraft.Pathfinding
         public Vector3Int GetCurrentGridPosition()
         {
             Vector3 pos = transform.position;
-            // Use a small positive bias so tiny sink/float precision does not misclassify the agent one floor lower.
-            float feetY = pos.y - PivotHeightFromFeet + 0.2f;
-            return new Vector3Int(
+            Vector3Int probe = new Vector3Int(
                 Mathf.FloorToInt(pos.x),
-                Mathf.FloorToInt(feetY),
+                Mathf.FloorToInt(pos.y),
                 Mathf.FloorToInt(pos.z));
+
+            IWorld world = World.Active;
+            if (world != null && world.Initialized)
+            {
+                if (AStarPathfinding.IsWalkableNode(probe, world))
+                {
+                    return probe;
+                }
+
+                Vector3Int? walkable = AStarPathfinding.FindNearestWalkableNode(probe, world, 2);
+                if (walkable.HasValue)
+                {
+                    return walkable.Value;
+                }
+            }
+
+            // Fallback only when world/query is unavailable.
+            float feetY = pos.y - PivotHeightFromFeet + 0.2f;
+            return new Vector3Int(Mathf.FloorToInt(pos.x), Mathf.FloorToInt(feetY), Mathf.FloorToInt(pos.z));
         }
 
         public void MoveTowardsNode(Vector3Int nextNode, float deltaTime)
@@ -270,15 +287,31 @@ namespace Minecraft.Pathfinding
             m_FighterAnimator.SetGroundedState(isGrounded);
         }
 
-        public void PlayActionAnimation(string actionName)
+        public bool PlayActionAnimation(string actionName)
         {
             if (string.IsNullOrWhiteSpace(actionName) || m_CombatRuntime == null || !m_CombatRuntime.CanAct)
             {
-                return;
+                return false;
             }
 
             ResolveFighterAnimatorIfNeeded();
-            m_FighterAnimator?.PlayActionByName(actionName);
+            if (m_FighterAnimator == null)
+            {
+                return false;
+            }
+
+            // Force locomotion booleans to idle before firing one-shot action triggers.
+            // Some animator controllers only allow attacks from idle-like sub states.
+            m_FighterAnimator.UpdateLocomotion(Vector3.zero, transform, false);
+            m_FighterAnimator.SetGroundedState(m_WasGroundedForAnimation);
+
+            if (m_FighterAnimator.PlayActionByName(actionName))
+            {
+                return true;
+            }
+
+            Debug.LogError($"[CrowdAgentController] Failed to play action '{actionName}' on '{name}'.", this);
+            return false;
         }
 
         private bool CanNavigate()
@@ -515,6 +548,7 @@ namespace Minecraft.Pathfinding
             }
 
             ResolveCombatFeedbackIfNeeded();
+            m_CombatFeedback?.SetOverlayMeta(m_CombatRuntime.DisplayName);
             m_CombatFeedback?.SetHealth(m_CombatRuntime.CurrentHealth, m_CombatRuntime.MaxHealth);
         }
 
@@ -531,9 +565,7 @@ namespace Minecraft.Pathfinding
 
             if (m_WasGroundedForAnimation && !isGrounded)
             {
-                m_FighterAnimator.PlayAction(planarVelocity.sqrMagnitude > 0.05f
-                    ? FighterAnimationAction.JumpForward
-                    : FighterAnimationAction.Jump);
+                m_FighterAnimator.PlayAction(FighterAnimationAction.Jump);
             }
 
             m_WasGroundedForAnimation = isGrounded;
