@@ -108,6 +108,7 @@ namespace Minecraft.Faction
         public Transform PlayerTarget;
         public Transform CoreTarget;
         public Transform RegroupPoint;
+        public Transform IdleTrainingTarget;
         public float CoreHealthNormalized;
         public bool AllowAwayTerrainEdit;
         public Vector3 HomeCenter;

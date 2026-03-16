@@ -19,8 +19,13 @@ namespace Minecraft.Faction
             Failed = 2,
         }
 
-        private readonly List<GoapGoalDefinition> m_Goals = new List<GoapGoalDefinition>(2);
-        private readonly List<GoapActionDefinition> m_Actions = new List<GoapActionDefinition>(8);
+        private readonly List<GoapGoalDefinition> m_Goals = new List<GoapGoalDefinition>(6);
+        private readonly List<GoapActionDefinition> m_Actions = new List<GoapActionDefinition>(16);
+        private readonly Dictionary<GoapActionDefinition, string> m_ActionReservationTemplates
+            = new Dictionary<GoapActionDefinition, string>(16);
+
+        [Header("GOAP Agent Role")]
+        [SerializeField] private GoapRolePreset m_GoapRolePreset = GoapRolePreset.Deputy;
 
         private CrowdAgentController m_Agent;
         private GoapP0Controller m_GoapController;
@@ -35,6 +40,8 @@ namespace Minecraft.Faction
 
         private float m_NextBrainTickTime;
         private float m_NextTargetProbeTime;
+        private Vector3 m_LastObservedPosition;
+        private float m_StalledSinceTime = -1f;
 
         private Transform m_SelectedTarget;
         private bool m_SelectedPlayerTarget;
@@ -49,7 +56,9 @@ namespace Minecraft.Faction
         private void Awake()
         {
             m_Agent = GetComponent<CrowdAgentController>();
-            m_GoapController = new GoapP0Controller();
+            m_GoapController = new GoapP0Controller(
+                $"faction-agent-{GetInstanceID()}",
+                rolePreset: m_GoapRolePreset);
             m_CombatConfig = new CombatRuntimeConfig();
             m_CombatPipeline = new CombatActionPipeline(m_CombatConfig);
             m_AuthorityGate = new CombatAuthorityLegalityGate();
@@ -94,6 +103,12 @@ namespace Minecraft.Faction
 
             m_NextBrainTickTime = Time.time + tickInterval;
             TickBrain();
+            TickStallFallbackChase();
+        }
+
+        private void OnDisable()
+        {
+            m_GoapController?.ReleaseAllReservations();
         }
 
         private void TickBrain()
@@ -120,6 +135,8 @@ namespace Minecraft.Faction
 
             state[FactKey.ThreatLevel] = HasThreatTarget() ? 1f : 0f;
 
+            UpdateActionReservationTargets();
+
             GoapLegalityContext legalityContext = new GoapLegalityContext(combatContext);
             Func<GoapActionDefinition, bool> filter = GoapActionFilters.CreateAuthorityFilter(
                 m_AuthorityGate,
@@ -145,12 +162,12 @@ namespace Minecraft.Faction
             switch (status)
             {
                 case StepExecutionStatus.Succeeded:
-                    m_GoapController.Executor.MarkCurrentStepSucceeded();
+                    m_GoapController.NotifyCurrentStepSucceeded();
                     ConsecutiveActionFailures = 0;
                     m_LastFailureReason = null;
                     break;
                 case StepExecutionStatus.Failed:
-                    m_GoapController.Executor.MarkCurrentStepFailed();
+                    m_GoapController.NotifyCurrentStepFailed(m_PlannerConfig);
                     ConsecutiveActionFailures++;
                     break;
             }
@@ -159,6 +176,61 @@ namespace Minecraft.Faction
             {
                 RunDeterministicFallback();
             }
+        }
+
+        private void TickStallFallbackChase()
+        {
+            if (m_SelectedTarget == null || m_Agent == null || !m_Agent.CombatRuntime.CanAct)
+            {
+                m_StalledSinceTime = -1f;
+                m_LastObservedPosition = transform.position;
+                return;
+            }
+
+            Vector3 current = transform.position;
+            Vector3 moveDelta = current - m_LastObservedPosition;
+            m_LastObservedPosition = current;
+
+            bool hardlyMoved = moveDelta.sqrMagnitude <= 0.0004f;
+            float attackRange = m_ObjectivePreset != null ? Mathf.Max(0.5f, m_ObjectivePreset.AttackRange) : 1.8f;
+            bool farFromTarget = Vector3.SqrMagnitude(m_SelectedTarget.position - current) > attackRange * attackRange * 1.2f;
+
+            if (!farFromTarget || !hardlyMoved)
+            {
+                m_StalledSinceTime = -1f;
+                return;
+            }
+
+            if (m_StalledSinceTime < 0f)
+            {
+                m_StalledSinceTime = Time.time;
+                return;
+            }
+
+            if (Time.time - m_StalledSinceTime < 1f)
+            {
+                return;
+            }
+
+            Vector3 target = m_SelectedTarget.position;
+            Vector3 toTarget = target - current;
+            toTarget.y = 0f;
+            if (toTarget.sqrMagnitude <= 0.0001f)
+            {
+                return;
+            }
+
+            float speed = Mathf.Max(1f, m_Agent.MoveSpeed * 0.65f);
+            current += toTarget.normalized * speed * Time.deltaTime;
+
+            float descendTargetY = target.y + m_Agent.PivotHeightFromFeet;
+            if (current.y > descendTargetY + 0.25f)
+            {
+                current.y = Mathf.MoveTowards(current.y, descendTargetY, Mathf.Max(1f, m_Agent.VerticalMoveSpeed) * Time.deltaTime);
+            }
+
+            transform.position = current;
+            m_Agent.CombatRuntime.Position = current;
         }
 
         private float DynamicGoalScorer(GoapGoalDefinition goal, IReadOnlyDictionary<FactKey, float> state)
@@ -170,10 +242,42 @@ namespace Minecraft.Faction
 
             float hpPct = state != null && state.TryGetValue(FactKey.AgentHpPct, out float hp) ? hp : 1f;
             float threat = state != null && state.TryGetValue(FactKey.ThreatLevel, out float t) ? t : 0f;
+            float coreHp = state != null && state.TryGetValue(FactKey.CoreHpPct, out float c) ? c : 1f;
+            float buildNeed = state != null && state.TryGetValue(FactKey.BuildNeed, out float b) ? b : 0f;
+            float resourceNeed = state != null && state.TryGetValue(FactKey.ResourceNeed, out float r) ? r : 0f;
+            float home = state != null && state.TryGetValue(FactKey.IsInHomeTerritory, out float h) ? h : 0f;
+            float portableFungus = state != null && state.TryGetValue(FactKey.HasPortableFungusCharge, out float p) ? p : 0f;
             float score = 0f;
 
             switch (goal.Type)
             {
+                case GoapGoalType.DefendCore:
+                    score += (1f - coreHp) * 4f;
+                    score += threat * 2.4f;
+                    if (m_Directive.Stage == FactionAssaultStage.Attack)
+                    {
+                        score += 1f;
+                    }
+                    break;
+                case GoapGoalType.BuildDefense:
+                    score += buildNeed * 2.2f;
+                    score += threat * 0.8f;
+                    if (m_Directive.Stage == FactionAssaultStage.Regroup)
+                    {
+                        score += 0.7f;
+                    }
+                    break;
+                case GoapGoalType.MineResource:
+                    score += resourceNeed * 2f;
+                    if (threat < 0.25f)
+                    {
+                        score += 0.6f;
+                    }
+                    break;
+                case GoapGoalType.ExpandFungus:
+                    score += portableFungus > 0f ? 1.2f : 0f;
+                    score += home < 0.5f ? 0.8f : 0f;
+                    break;
                 case GoapGoalType.AttackThreat:
                     score += threat * 2f;
                     if (m_Directive.Stage == FactionAssaultStage.Attack)
@@ -315,6 +419,8 @@ namespace Minecraft.Faction
                 return StepExecutionStatus.Failed;
             }
 
+            m_Agent?.PlayActionAnimation(result.AnimationActionName);
+
             return StepExecutionStatus.Succeeded;
         }
 
@@ -342,6 +448,8 @@ namespace Minecraft.Faction
                 m_LastFailureReason = result.FailureReason;
                 return StepExecutionStatus.Failed;
             }
+
+            m_Agent?.PlayActionAnimation(result.AnimationActionName);
 
             return StepExecutionStatus.Succeeded;
         }
@@ -422,6 +530,27 @@ namespace Minecraft.Faction
                 m_SelectedPlayerTarget = false;
                 m_SelectedTargetReachable = true;
                 return;
+            }
+
+            if (!HasExplicitDirectiveTarget())
+            {
+                Transform idleTrainingTarget = ResolveIdleTrainingTarget();
+                bool idleReachable = IsTargetReachable(idleTrainingTarget);
+                if (idleTrainingTarget != null && idleReachable)
+                {
+                    m_SelectedTarget = idleTrainingTarget;
+                    m_SelectedPlayerTarget = false;
+                    m_SelectedTargetReachable = true;
+                    return;
+                }
+
+                if (idleTrainingTarget != null)
+                {
+                    m_SelectedTarget = idleTrainingTarget;
+                    m_SelectedPlayerTarget = false;
+                    m_SelectedTargetReachable = false;
+                    return;
+                }
             }
 
             m_SelectedTarget = player != null ? player : core;
@@ -519,130 +648,147 @@ namespace Minecraft.Faction
             return m_Directive.CoreTarget;
         }
 
+        private bool HasExplicitDirectiveTarget()
+        {
+            return m_Directive.PlayerTarget != null
+                   || m_Directive.CoreTarget != null
+                   || m_Directive.RegroupPoint != null;
+        }
+
+        private Transform ResolveIdleTrainingTarget()
+        {
+            Transform target = m_Directive.IdleTrainingTarget;
+            if (target == null)
+            {
+                return null;
+            }
+
+            if (!target.gameObject.activeInHierarchy)
+            {
+                return null;
+            }
+
+            if (!target.TryGetComponent(out CrowdAgentController crowdAgent))
+            {
+                return target;
+            }
+
+            return crowdAgent.CombatRuntime != null && crowdAgent.CombatRuntime.IsAlive
+                ? target
+                : null;
+        }
+
         private void BuildGoapDefinitions()
         {
             m_Goals.Clear();
             m_Actions.Clear();
+            GoapTaskCatalog.BuildForRole(m_GoapRolePreset, m_Goals, m_Actions);
+            CacheReservationTemplates();
+        }
 
-            GoapGoalDefinition attackGoal = new GoapGoalDefinition
+        private void CacheReservationTemplates()
+        {
+            m_ActionReservationTemplates.Clear();
+
+            for (int i = 0; i < m_Actions.Count; i++)
             {
-                Type = GoapGoalType.AttackThreat,
-                BasePriority = 1f,
-                DesiredState = new List<GoapCondition>
+                GoapActionDefinition action = m_Actions[i];
+                if (action == null || string.IsNullOrWhiteSpace(action.ReservationTargetId))
                 {
-                    new GoapCondition(FactKey.ThreatLevel, CompareOp.LessOrEqual, 0.1f),
-                },
-            };
+                    continue;
+                }
 
-            GoapGoalDefinition recoverGoal = new GoapGoalDefinition
+                m_ActionReservationTemplates[action] = action.ReservationTargetId;
+            }
+        }
+
+        private void UpdateActionReservationTargets()
+        {
+            if (m_ActionReservationTemplates.Count == 0)
             {
-                Type = GoapGoalType.Recover,
-                BasePriority = 0.9f,
-                DesiredState = new List<GoapCondition>
-                {
-                    new GoapCondition(FactKey.AgentHpPct, CompareOp.GreaterOrEqual, 0.65f),
-                },
-            };
+                return;
+            }
 
-            m_Goals.Add(attackGoal);
-            m_Goals.Add(recoverGoal);
+            string selectedBlock = ResolveSelectedBlockReservationKey();
+            string selectedEntity = ResolveSelectedEntityReservationKey();
+            string corePoint = ResolveCoreReservationKey();
+            string agentSlot = $"slot:agent:{GetInstanceID()}";
 
-            m_Actions.Add(new GoapActionDefinition
+            foreach (KeyValuePair<GoapActionDefinition, string> pair in m_ActionReservationTemplates)
             {
-                Id = "assault.move",
-                Type = GoapActionType.MoveTo,
-                BaseCost = 1f,
-                Preconditions = new List<GoapCondition>
+                GoapActionDefinition action = pair.Key;
+                if (action == null)
                 {
-                    new GoapCondition(FactKey.ThreatLevel, CompareOp.Greater, 0.1f),
-                },
-                Effects = new List<GoapEffect>
-                {
-                    new GoapEffect(FactKey.TargetReachable, EffectOp.Set, 1f),
-                },
-            });
+                    continue;
+                }
 
-            m_Actions.Add(new GoapActionDefinition
-            {
-                Id = "assault.attack",
-                Type = GoapActionType.AttackTarget,
-                BaseCost = 1.2f,
-                Preconditions = new List<GoapCondition>
-                {
-                    new GoapCondition(FactKey.TargetReachable, CompareOp.GreaterOrEqual, 1f),
-                    new GoapCondition(FactKey.ThreatLevel, CompareOp.Greater, 0.1f),
-                },
-                Effects = new List<GoapEffect>
-                {
-                    new GoapEffect(FactKey.ThreatLevel, EffectOp.Set, 0f),
-                },
-            });
+                action.ReservationTargetId = ResolveReservationTemplate(
+                    pair.Value,
+                    selectedBlock,
+                    selectedEntity,
+                    corePoint,
+                    agentSlot);
+            }
+        }
 
-            m_Actions.Add(new GoapActionDefinition
+        private string ResolveReservationTemplate(
+            string template,
+            string selectedBlock,
+            string selectedEntity,
+            string corePoint,
+            string agentSlot)
+        {
+            if (string.IsNullOrWhiteSpace(template))
             {
-                Id = "assault.break-block",
-                Type = GoapActionType.BreakBlock,
-                BaseCost = 1.3f,
-                Preconditions = new List<GoapCondition>
-                {
-                    new GoapCondition(FactKey.IsInHomeTerritory, CompareOp.GreaterOrEqual, 1f),
-                    new GoapCondition(FactKey.ThreatLevel, CompareOp.Greater, 0.1f),
-                },
-                Effects = new List<GoapEffect>
-                {
-                    new GoapEffect(FactKey.ThreatLevel, EffectOp.Add, -0.2f),
-                },
-            });
+                return template;
+            }
 
-            m_Actions.Add(new GoapActionDefinition
-            {
-                Id = "assault.place-block",
-                Type = GoapActionType.PlaceBlock,
-                BaseCost = 1.4f,
-                Preconditions = new List<GoapCondition>
-                {
-                    new GoapCondition(FactKey.IsInHomeTerritory, CompareOp.GreaterOrEqual, 1f),
-                    new GoapCondition(FactKey.AgentHpPct, CompareOp.Less, 0.45f),
-                },
-                Effects = new List<GoapEffect>
-                {
-                    new GoapEffect(FactKey.AgentHpPct, EffectOp.Add, 0.05f),
-                },
-            });
+            return template
+                .Replace(GoapTaskCatalog.ReservationTokenSelectedBlock, selectedBlock)
+                .Replace(GoapTaskCatalog.ReservationTokenSelectedEntity, selectedEntity)
+                .Replace(GoapTaskCatalog.ReservationTokenCore, corePoint)
+                .Replace(GoapTaskCatalog.ReservationTokenAgentSlot, agentSlot);
+        }
 
-            m_Actions.Add(new GoapActionDefinition
-            {
-                Id = "assault.retreat",
-                Type = GoapActionType.Retreat,
-                BaseCost = 0.2f,
-                Preconditions = new List<GoapCondition>
-                {
-                    new GoapCondition(FactKey.AgentHpPct, CompareOp.Less, 0.35f),
-                },
-                Effects = new List<GoapEffect>
-                {
-                    new GoapEffect(FactKey.AgentHpPct, EffectOp.Add, 0.2f),
-                    new GoapEffect(FactKey.TargetReachable, EffectOp.Set, 1f),
-                },
-            });
+        private string ResolveSelectedBlockReservationKey()
+        {
+            Vector3Int block = m_SelectedTarget != null
+                ? ToGrid(m_SelectedTarget.position)
+                : m_Agent.GetCurrentGridPosition();
+            return $"block:{block.x},{block.y},{block.z}";
+        }
 
-            m_Actions.Add(new GoapActionDefinition
+        private string ResolveSelectedEntityReservationKey()
+        {
+            if (m_SelectedTarget == null)
             {
-                Id = "assault.hold",
-                Type = GoapActionType.HoldPosition,
-                BaseCost = 0.5f,
-                Preconditions = new List<GoapCondition>(),
-                Effects = new List<GoapEffect>(),
-            });
+                return $"entity:none:{GetInstanceID()}";
+            }
 
-            m_Actions.Add(new GoapActionDefinition
+            if (m_SelectedTarget.TryGetComponent(out PlayerEntity _))
             {
-                Id = "assault.idle",
-                Type = GoapActionType.Idle,
-                BaseCost = 0.6f,
-                Preconditions = new List<GoapCondition>(),
-                Effects = new List<GoapEffect>(),
-            });
+                return "entity:player";
+            }
+
+            if (m_SelectedTarget.TryGetComponent(out CrowdAgentController crowdAgent))
+            {
+                int runtimeId = crowdAgent.CombatRuntime != null ? crowdAgent.CombatRuntime.RuntimeId : crowdAgent.GetInstanceID();
+                return $"entity:crowd:{runtimeId}";
+            }
+
+            return $"entity:transform:{m_SelectedTarget.GetInstanceID()}";
+        }
+
+        private string ResolveCoreReservationKey()
+        {
+            Transform core = m_Directive.CoreTarget;
+            if (core == null)
+            {
+                return "core:none";
+            }
+
+            Vector3Int coreGrid = ToGrid(core.position);
+            return $"core:{coreGrid.x},{coreGrid.y},{coreGrid.z}";
         }
 
         private static Vector3Int ToGrid(Vector3 worldPos)

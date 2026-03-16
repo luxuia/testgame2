@@ -129,6 +129,36 @@ namespace Minecraft.Entities
         };
 
         private static readonly Dictionary<string, FighterAnimationAction> s_NameToAction = BuildActionLookup();
+        private static readonly Dictionary<FighterAnimationAction, string[]> s_ImmediateStatePaths = new Dictionary<FighterAnimationAction, string[]>
+        {
+            {
+                FighterAnimationAction.Jump,
+                new[]
+                {
+                    "Base Layer.Jumps.Jump",
+                    "Base Layer.InAir.Jump",
+                    "Base Layer.Jump",
+                }
+            },
+            {
+                FighterAnimationAction.JumpForward,
+                new[]
+                {
+                    "Base Layer.Jumps.JumpForward",
+                    "Base Layer.InAir.JumpForward",
+                    "Base Layer.JumpForward",
+                }
+            },
+            {
+                FighterAnimationAction.JumpBackward,
+                new[]
+                {
+                    "Base Layer.Jumps.JumpBackward",
+                    "Base Layer.InAir.JumpBackward",
+                    "Base Layer.JumpBackward",
+                }
+            },
+        };
 
         private float m_LastActionTime = -999f;
         private bool m_Blocking;
@@ -258,6 +288,18 @@ namespace Minecraft.Entities
                 return false;
             }
 
+            if (IsJumpAction(action))
+            {
+                // Clear locomotion booleans first so jump can interrupt locomotion immediately.
+                SetLocomotion(false, false, false, false, false, false);
+                if (TryCrossFadeToActionState(action))
+                {
+                    m_LastActionTime = Time.time;
+                    StartInAirWindow();
+                    return true;
+                }
+            }
+
             m_Animator.SetTrigger(triggerName);
             m_LastActionTime = Time.time;
 
@@ -299,6 +341,43 @@ namespace Minecraft.Entities
             }
 
             return PlayAction(action);
+        }
+
+        private static bool IsJumpAction(FighterAnimationAction action)
+        {
+            return action == FighterAnimationAction.Jump ||
+                   action == FighterAnimationAction.JumpForward ||
+                   action == FighterAnimationAction.JumpBackward;
+        }
+
+        private bool TryCrossFadeToActionState(FighterAnimationAction action)
+        {
+            if (m_Animator == null ||
+                !s_ImmediateStatePaths.TryGetValue(action, out string[] statePaths) ||
+                statePaths == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < statePaths.Length; i++)
+            {
+                string statePath = statePaths[i];
+                if (string.IsNullOrEmpty(statePath))
+                {
+                    continue;
+                }
+
+                int fullPathHash = Animator.StringToHash(statePath);
+                if (!m_Animator.HasState(0, fullPathHash))
+                {
+                    continue;
+                }
+
+                m_Animator.CrossFadeInFixedTime(fullPathHash, 0.03f, 0, 0f);
+                return true;
+            }
+
+            return false;
         }
 
         private void StartInAirWindow()

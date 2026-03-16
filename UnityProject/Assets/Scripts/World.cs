@@ -3,6 +3,7 @@ using System.Collections;
 using System.Diagnostics;
 using Minecraft.Assets;
 using Minecraft.Audio;
+using Minecraft.Building;
 using Minecraft.Configurations;
 using Minecraft.Entities;
 using Minecraft.Lua;
@@ -138,6 +139,7 @@ namespace Minecraft
 
             // Ensure fungal overlay/state runtime is always available in playable scenes.
             FungalCarpetSystem.EnsureExists(transform);
+            BuildingRuntimeService.EnsureExists(transform);
 
             LuaManager.ExecuteLuaScripts();
             BlockDataTable.LoadBlockBehavioursInLua(this);

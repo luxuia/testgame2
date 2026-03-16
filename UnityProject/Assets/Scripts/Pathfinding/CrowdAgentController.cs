@@ -28,10 +28,20 @@ namespace Minecraft.Pathfinding
 
         [Tooltip("上行台阶时，只有水平接近该距离内才开始抬升")]
         public float UpwardMoveStartDistance = 0.45f;
+        [Tooltip("下行台阶时，只有水平接近该距离内才开始下降（防止跨楼层提前下坠）")]
+        public float DownwardMoveStartDistance = 0.45f;
 
         [Header("Fungal Carpet")]
         [Tooltip("Agent 移动时菌毯足迹刷新间隔（秒）")]
         public float FungalFootprintInterval = 0.12f;
+
+        [Header("Spawn Grounding")]
+        [Tooltip("初始化时自动向下贴地（不会向上抬升）")]
+        public bool SnapToGroundOnInitialize = true;
+        [Tooltip("贴地时给脚底预留的微小离地偏移")]
+        [Min(0f)] public float GroundSnapOffset = 0.05f;
+        [Tooltip("初始化贴地允许的最大下落高度，超过该值视为高低层结构并跳过贴地")]
+        [Min(0f)] public float MaxGroundSnapDropDistance = 1.25f;
 
         [Header("Combat Runtime")]
         public CombatActorRole CombatRole = CombatActorRole.Puji;
@@ -39,13 +49,19 @@ namespace Minecraft.Pathfinding
         [Min(0f)] public float CombatInitialHealth = 60f;
         [Min(0f)] public float CombatAttackPower = 6f;
         [Min(0f)] public float CombatDefense = 1f;
+        [Min(0f)] public float DespawnDelayOnDeath = 1.2f;
+        public bool DestroyOnDespawn = true;
         [SerializeField] private FighterAnimatorDriver m_FighterAnimator;
+        [SerializeField] private CombatFeedbackView m_CombatFeedback;
 
         [System.NonSerialized] private Vector3Int? m_TargetBlock;
         [System.NonSerialized] private Vector2Int m_LastFungalFootprintXZ = new Vector2Int(int.MinValue, int.MinValue);
         [System.NonSerialized] private float m_NextFungalFootprintTime;
         [System.NonSerialized] private CombatEntityRuntime m_CombatRuntime;
         [System.NonSerialized] private bool m_WasGroundedForAnimation = true;
+        [System.NonSerialized] private float m_DeathEnteredTime = -1f;
+        [System.NonSerialized] private bool m_MovementLockedByDeath;
+        [System.NonSerialized] private bool m_GroundSnapResolved;
 
         public bool HasTarget => m_TargetBlock.HasValue;
         public Vector3Int TargetBlock => m_TargetBlock ?? default;
@@ -56,16 +72,44 @@ namespace Minecraft.Pathfinding
             InitializeCombatRuntimeIfNeeded();
             SyncCombatRuntimePosition();
             ResolveFighterAnimatorIfNeeded();
+            ResolveCombatFeedbackIfNeeded();
+            RefreshCombatFeedbackHealth();
         }
 
-        public void SetTarget(Vector3Int target) => m_TargetBlock = target;
+        private void Update()
+        {
+            TrySnapToGroundOnInitialize();
+            SyncCombatRuntimePosition();
+            TickCombatLifecycle();
+            RefreshCombatFeedbackHealth();
+        }
 
-        public void ClearTarget() => m_TargetBlock = null;
+        private void OnDestroy()
+        {
+            UnbindCombatRuntimeEvents();
+        }
+
+        public void SetTarget(Vector3Int target)
+        {
+            if (!CanNavigate())
+            {
+                return;
+            }
+
+            m_TargetBlock = target;
+        }
+
+        public void ClearTarget()
+        {
+            m_TargetBlock = null;
+            ForceIdleAnimation();
+        }
 
         public Vector3Int GetCurrentGridPosition()
         {
             Vector3 pos = transform.position;
-            float feetY = pos.y - PivotHeightFromFeet + 0.01f;
+            // Use a small positive bias so tiny sink/float precision does not misclassify the agent one floor lower.
+            float feetY = pos.y - PivotHeightFromFeet + 0.2f;
             return new Vector3Int(
                 Mathf.FloorToInt(pos.x),
                 Mathf.FloorToInt(feetY),
@@ -74,12 +118,23 @@ namespace Minecraft.Pathfinding
 
         public void MoveTowardsNode(Vector3Int nextNode, float deltaTime)
         {
+            if (!CanNavigate())
+            {
+                ForceIdleAnimation();
+                return;
+            }
+
             Vector2 desired = GetDesiredPlanarVelocity(nextNode);
             MoveWithPlanarVelocity(nextNode, new Vector3(desired.x, 0f, desired.y), deltaTime);
         }
 
         public Vector2 GetDesiredPlanarVelocity(Vector3Int nextNode)
         {
+            if (!CanNavigate())
+            {
+                return Vector2.zero;
+            }
+
             Vector3 targetPos = new Vector3(
                 nextNode.x + 0.5f,
                 nextNode.y + PivotHeightFromFeet,
@@ -124,6 +179,12 @@ namespace Minecraft.Pathfinding
 
         public void MoveWithPlanarVelocity(Vector3Int nextNode, Vector3 planarVelocity, float deltaTime)
         {
+            if (!CanNavigate())
+            {
+                ForceIdleAnimation();
+                return;
+            }
+
             Vector3 targetPos = new Vector3(
                 nextNode.x + 0.5f,
                 nextNode.y + PivotHeightFromFeet,
@@ -160,6 +221,14 @@ namespace Minecraft.Pathfinding
                     yTarget = current.y;
                 }
             }
+            else if (targetPos.y < current.y - 0.001f)
+            {
+                float startDownDistance = Mathf.Max(NodeReachDistance * 2f, DownwardMoveStartDistance);
+                if (planarDistance > startDownDistance)
+                {
+                    yTarget = current.y;
+                }
+            }
 
             current.y = Mathf.MoveTowards(current.y, yTarget, VerticalMoveSpeed * deltaTime);
             transform.position = current;
@@ -180,34 +249,144 @@ namespace Minecraft.Pathfinding
         public float ApplyCombatDamage(float amount)
         {
             InitializeCombatRuntimeIfNeeded();
-            float before = m_CombatRuntime.CurrentHealth;
-            float applied = m_CombatRuntime.ApplyDamage(amount);
-            if (applied > 0f && m_FighterAnimator != null)
-            {
-                if (before > 0f && m_CombatRuntime.CurrentHealth <= 0f)
-                {
-                    m_FighterAnimator.PlayAction(FighterAnimationAction.Death);
-                }
-                else
-                {
-                    m_FighterAnimator.PlayAction(FighterAnimationAction.LightHit);
-                }
-            }
-
-            return applied;
+            return m_CombatRuntime.TryApplyHit(amount, out float applied, out _) ? applied : 0f;
         }
 
         public float HealCombat(float amount)
         {
             InitializeCombatRuntimeIfNeeded();
-            float before = m_CombatRuntime.CurrentHealth;
-            float healed = m_CombatRuntime.Heal(amount);
-            if (healed > 0f && before <= 0f && m_CombatRuntime.CurrentHealth > 0f)
+            return m_CombatRuntime.Heal(amount);
+        }
+
+        public void ForceIdleAnimation(bool isGrounded = true)
+        {
+            ResolveFighterAnimatorIfNeeded();
+            if (m_FighterAnimator == null)
             {
-                m_FighterAnimator?.PlayAction(FighterAnimationAction.Revive);
+                return;
             }
 
-            return healed;
+            m_FighterAnimator.UpdateLocomotion(Vector3.zero, transform, false);
+            m_FighterAnimator.SetGroundedState(isGrounded);
+        }
+
+        public void PlayActionAnimation(string actionName)
+        {
+            if (string.IsNullOrWhiteSpace(actionName) || m_CombatRuntime == null || !m_CombatRuntime.CanAct)
+            {
+                return;
+            }
+
+            ResolveFighterAnimatorIfNeeded();
+            m_FighterAnimator?.PlayActionByName(actionName);
+        }
+
+        private bool CanNavigate()
+        {
+            return !m_MovementLockedByDeath && (m_CombatRuntime == null || m_CombatRuntime.CanAct);
+        }
+
+        private void TickCombatLifecycle()
+        {
+            if (m_CombatRuntime == null || m_CombatRuntime.LifecycleState != CombatLifecycleState.Dead || m_DeathEnteredTime < 0f)
+            {
+                return;
+            }
+
+            if (Time.time >= m_DeathEnteredTime + Mathf.Max(0f, DespawnDelayOnDeath))
+            {
+                m_CombatRuntime.TryMarkDespawned();
+            }
+        }
+
+        private void BindCombatRuntimeEvents()
+        {
+            if (m_CombatRuntime == null)
+            {
+                return;
+            }
+
+            m_CombatRuntime.OnHit -= HandleRuntimeHit;
+            m_CombatRuntime.OnDamageApplied -= HandleRuntimeDamageApplied;
+            m_CombatRuntime.OnDeath -= HandleRuntimeDeath;
+            m_CombatRuntime.OnDespawn -= HandleRuntimeDespawn;
+
+            m_CombatRuntime.OnHit += HandleRuntimeHit;
+            m_CombatRuntime.OnDamageApplied += HandleRuntimeDamageApplied;
+            m_CombatRuntime.OnDeath += HandleRuntimeDeath;
+            m_CombatRuntime.OnDespawn += HandleRuntimeDespawn;
+        }
+
+        private void UnbindCombatRuntimeEvents()
+        {
+            if (m_CombatRuntime == null)
+            {
+                return;
+            }
+
+            m_CombatRuntime.OnHit -= HandleRuntimeHit;
+            m_CombatRuntime.OnDamageApplied -= HandleRuntimeDamageApplied;
+            m_CombatRuntime.OnDeath -= HandleRuntimeDeath;
+            m_CombatRuntime.OnDespawn -= HandleRuntimeDespawn;
+        }
+
+        private void HandleRuntimeHit(CombatEntityRuntime runtime, float incomingDamage)
+        {
+            _ = runtime;
+            _ = incomingDamage;
+        }
+
+        private void HandleRuntimeDamageApplied(CombatEntityRuntime runtime, float damage)
+        {
+            if (runtime != m_CombatRuntime)
+            {
+                return;
+            }
+
+            ResolveFighterAnimatorIfNeeded();
+            if (damage > 0f &&
+                runtime.LifecycleState == CombatLifecycleState.Alive &&
+                runtime.CurrentHealth > 0f &&
+                m_FighterAnimator != null)
+            {
+                m_FighterAnimator.PlayAction(FighterAnimationAction.LightHit);
+                ResolveCombatFeedbackIfNeeded();
+                m_CombatFeedback?.ShowDamage(damage);
+            }
+
+            RefreshCombatFeedbackHealth();
+        }
+
+        private void HandleRuntimeDeath(CombatEntityRuntime runtime)
+        {
+            if (runtime != m_CombatRuntime)
+            {
+                return;
+            }
+
+            m_DeathEnteredTime = Time.time;
+            m_MovementLockedByDeath = true;
+            ClearTarget();
+            m_FighterAnimator?.PlayAction(FighterAnimationAction.Death);
+            RefreshCombatFeedbackHealth();
+        }
+
+        private void HandleRuntimeDespawn(CombatEntityRuntime runtime)
+        {
+            if (runtime != m_CombatRuntime)
+            {
+                return;
+            }
+
+            ClearTarget();
+            if (DestroyOnDespawn)
+            {
+                Destroy(gameObject);
+            }
+            else
+            {
+                gameObject.SetActive(false);
+            }
         }
 
         private void TrySpreadFungalCarpet(Vector3 planarVelocity)
@@ -245,6 +424,7 @@ namespace Minecraft.Pathfinding
         {
             if (m_CombatRuntime != null)
             {
+                BindCombatRuntimeEvents();
                 return;
             }
 
@@ -261,7 +441,17 @@ namespace Minecraft.Pathfinding
                 AttackPower = Mathf.Max(0f, CombatAttackPower),
                 Defense = Mathf.Max(0f, CombatDefense),
                 Position = transform.position,
+                LifecycleState = initialHealth > 0f ? CombatLifecycleState.Alive : CombatLifecycleState.Dead,
             };
+
+            BindCombatRuntimeEvents();
+            if (initialHealth <= 0f)
+            {
+                m_CombatRuntime.EnterDeathLifecycle();
+            }
+
+            ResolveCombatFeedbackIfNeeded();
+            RefreshCombatFeedbackHealth();
         }
 
         private void SyncCombatRuntimePosition()
@@ -302,6 +492,32 @@ namespace Minecraft.Pathfinding
             m_FighterAnimator?.TryInitialize();
         }
 
+        private void ResolveCombatFeedbackIfNeeded()
+        {
+            if (m_CombatFeedback == null)
+            {
+                m_CombatFeedback = GetComponent<CombatFeedbackView>();
+            }
+
+            if (m_CombatFeedback == null)
+            {
+                m_CombatFeedback = gameObject.AddComponent<CombatFeedbackView>();
+            }
+
+            m_CombatFeedback?.EnsureInitialized();
+        }
+
+        private void RefreshCombatFeedbackHealth()
+        {
+            if (m_CombatRuntime == null)
+            {
+                return;
+            }
+
+            ResolveCombatFeedbackIfNeeded();
+            m_CombatFeedback?.SetHealth(m_CombatRuntime.CurrentHealth, m_CombatRuntime.MaxHealth);
+        }
+
         private void UpdateFighterAnimator(Vector3 planarVelocity, bool isGrounded)
         {
             if (m_FighterAnimator == null)
@@ -321,6 +537,52 @@ namespace Minecraft.Pathfinding
             }
 
             m_WasGroundedForAnimation = isGrounded;
+        }
+
+        private void TrySnapToGroundOnInitialize()
+        {
+            if (m_GroundSnapResolved)
+            {
+                return;
+            }
+
+            if (!SnapToGroundOnInitialize)
+            {
+                m_GroundSnapResolved = true;
+                return;
+            }
+
+            IWorld world = World.Active;
+            if (world == null || !world.Initialized || world.RWAccessor == null)
+            {
+                return;
+            }
+
+            Vector3 current = transform.position;
+            int x = Mathf.FloorToInt(current.x);
+            int z = Mathf.FloorToInt(current.z);
+            int topY = world.RWAccessor.GetTopVisibleBlockY(x, z, int.MinValue);
+            if (topY == int.MinValue)
+            {
+                return;
+            }
+
+            float desiredY = topY + Mathf.Max(0f, PivotHeightFromFeet) + Mathf.Max(0f, GroundSnapOffset);
+            float dropDistance = current.y - desiredY;
+            if (dropDistance > Mathf.Max(0f, MaxGroundSnapDropDistance))
+            {
+                m_GroundSnapResolved = true;
+                return;
+            }
+
+            if (desiredY < current.y - 0.0001f)
+            {
+                current.y = desiredY;
+                transform.position = current;
+            }
+
+            SyncCombatRuntimePosition();
+            m_GroundSnapResolved = true;
         }
     }
 }

@@ -28,6 +28,17 @@ namespace Minecraft.Faction
         [SerializeField] [Min(0f)] private float m_InitialWaveDelaySec = 1f;
         [SerializeField] [Min(0.1f)] private float m_FallbackWaveIntervalSec = 10f;
 
+        [Header("Crowd Integration")]
+        [SerializeField] private bool m_AttachSpawnedAgentsToCrowdRoot = true;
+        [SerializeField] private Transform m_AgentRuntimeParent;
+        [SerializeField] [Range(0, 6)] private int m_CombatChunkPreloadRadius = 2;
+        [SerializeField] [Min(0.1f)] private float m_CombatChunkPreloadIntervalSec = 0.5f;
+
+        [Header("Idle Training Dummy")]
+        [SerializeField] private bool m_EnableIdleTrainingDummy = true;
+        [SerializeField] [Min(1f)] private float m_IdleTrainingSpawnRadius = 3.5f;
+        [SerializeField] [Min(1f)] private float m_IdleTrainingMaxHealth = 1200f;
+
         [Header("Debug")]
         [SerializeField] private bool m_EnableRuntimeLog;
 
@@ -43,10 +54,18 @@ namespace Minecraft.Faction
         private float m_NextWaveStartTime;
         private float m_NextSpawnTickTime;
         private int m_SpawnAnchorCursor;
+        private Transform m_IdleTrainingDummy;
+        private CrowdFlowFieldCoordinator m_CrowdCoordinator;
+        private float m_NextChunkPreloadTime;
 
         private void Start()
         {
             ResolveActiveProfile();
+            if (m_ActiveProfile != null)
+            {
+                EnsureIdleTrainingDummy();
+            }
+
             m_StageEnteredAt = Time.time;
             m_NextWaveStartTime = Time.time + Mathf.Max(0f, m_InitialWaveDelaySec);
         }
@@ -59,6 +78,8 @@ namespace Minecraft.Faction
                 return;
             }
 
+            PreloadCombatChunks();
+            EnsureIdleTrainingDummy();
             UpdateStage();
             TrySpawnWave();
             BroadcastDirective();
@@ -243,6 +264,12 @@ namespace Minecraft.Faction
 
         private void TrySpawnWave()
         {
+            if (!IsSpawnEnvironmentReady())
+            {
+                m_NextWaveStartTime = Time.time + 0.25f;
+                return;
+            }
+
             if (Time.time < m_NextWaveStartTime)
             {
                 return;
@@ -305,16 +332,19 @@ namespace Minecraft.Faction
                 return false;
             }
 
+            Vector3 spawnPos = ResolveSpawnPosition(anchor.AnchorTransform.position);
+            Transform runtimeParent = ResolveAgentRuntimeParent();
+
             GameObject go;
             if (m_ActiveProfile.AgentPrefab != null)
             {
-                go = Instantiate(m_ActiveProfile.AgentPrefab, anchor.AnchorTransform.position, anchor.AnchorTransform.rotation, transform);
+                go = Instantiate(m_ActiveProfile.AgentPrefab, spawnPos, anchor.AnchorTransform.rotation, runtimeParent);
             }
             else
             {
                 go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                go.transform.SetPositionAndRotation(anchor.AnchorTransform.position, anchor.AnchorTransform.rotation);
-                go.transform.SetParent(transform);
+                go.transform.SetPositionAndRotation(spawnPos, anchor.AnchorTransform.rotation);
+                go.transform.SetParent(runtimeParent);
             }
 
             go.name = $"{m_ActiveProfile.FactionId}_Agent_{m_CurrentWaveIndex:D2}_{m_WaveSpawnedCount:D3}";
@@ -336,6 +366,148 @@ namespace Minecraft.Faction
             m_ActiveAgents.Add(bridge);
             bridge.SetDirective(BuildDirective());
             return true;
+        }
+
+        private Transform ResolveAgentRuntimeParent()
+        {
+            if (m_AgentRuntimeParent != null)
+            {
+                return m_AgentRuntimeParent;
+            }
+
+            if (!m_AttachSpawnedAgentsToCrowdRoot)
+            {
+                return transform;
+            }
+
+            if (m_CrowdCoordinator == null)
+            {
+                m_CrowdCoordinator = FindObjectOfType<CrowdFlowFieldCoordinator>();
+            }
+
+            if (m_CrowdCoordinator == null)
+            {
+                return transform;
+            }
+
+            return m_CrowdCoordinator.AgentSearchRoot != null
+                ? m_CrowdCoordinator.AgentSearchRoot
+                : m_CrowdCoordinator.transform;
+        }
+
+        private Vector3 ResolveSpawnPosition(Vector3 anchorPosition)
+        {
+            IWorld world = World.Active;
+            if (world == null || !world.Initialized || world.RWAccessor == null)
+            {
+                return new Vector3(
+                    anchorPosition.x,
+                    ResolveFallbackSpawnY(anchorPosition.y),
+                    anchorPosition.z);
+            }
+
+            int x = Mathf.FloorToInt(anchorPosition.x);
+            int z = Mathf.FloorToInt(anchorPosition.z);
+            int topY = world.RWAccessor.GetTopVisibleBlockY(x, z, int.MinValue);
+            if (topY != int.MinValue)
+            {
+                return new Vector3(anchorPosition.x, topY + 1.05f, anchorPosition.z);
+            }
+
+            // Request anchor chunk loading so CrowdAgentController ground-snap can resolve on subsequent frames.
+            if (world.ChunkManager != null)
+            {
+                world.ChunkManager.GetChunk(ChunkPos.GetFromAny(x, z), true, out _);
+            }
+
+            return new Vector3(
+                anchorPosition.x,
+                ResolveFallbackSpawnY(anchorPosition.y),
+                anchorPosition.z);
+        }
+
+        private bool IsSpawnEnvironmentReady()
+        {
+            IWorld world = World.Active;
+            return world != null && world.Initialized && world.RWAccessor != null;
+        }
+
+        private void PreloadCombatChunks()
+        {
+            if (Time.time < m_NextChunkPreloadTime)
+            {
+                return;
+            }
+
+            m_NextChunkPreloadTime = Time.time + Mathf.Max(0.1f, m_CombatChunkPreloadIntervalSec);
+
+            IWorld world = World.Active;
+            if (world == null || !world.Initialized || world.ChunkManager == null)
+            {
+                return;
+            }
+
+            int radius = Mathf.Max(0, m_CombatChunkPreloadRadius);
+            PreloadChunksAround(world, ResolvePlayerTarget(), radius);
+            PreloadChunksAround(world, m_CoreTarget, radius);
+            PreloadChunksAround(world, m_RegroupPoint, radius);
+
+            if (m_SpawnAnchors == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < m_SpawnAnchors.Count; i++)
+            {
+                FactionSpawnAnchor anchor = m_SpawnAnchors[i];
+                if (anchor == null || !anchor.Enabled || anchor.AnchorTransform == null)
+                {
+                    continue;
+                }
+
+                PreloadChunksAround(world, anchor.AnchorTransform, radius);
+            }
+        }
+
+        private static void PreloadChunksAround(IWorld world, Transform focus, int radius)
+        {
+            if (world == null || world.ChunkManager == null || focus == null)
+            {
+                return;
+            }
+
+            int x = Mathf.FloorToInt(focus.position.x);
+            int z = Mathf.FloorToInt(focus.position.z);
+            ChunkPos center = ChunkPos.GetFromAny(x, z);
+            for (int ox = -radius; ox <= radius; ox++)
+            {
+                for (int oz = -radius; oz <= radius; oz++)
+                {
+                    world.ChunkManager.GetChunk(center.AddOffset(ox, oz), true, out _);
+                }
+            }
+        }
+
+        private float ResolveFallbackSpawnY(float defaultY)
+        {
+            Transform playerTarget = ResolvePlayerTarget();
+            if (playerTarget != null)
+            {
+                return playerTarget.position.y;
+            }
+
+            GameObject taggedPlayer = GameObject.FindGameObjectWithTag("Player");
+            if (taggedPlayer != null)
+            {
+                return taggedPlayer.transform.position.y;
+            }
+
+            if (m_CoreTarget != null)
+            {
+                return m_CoreTarget.position.y;
+            }
+
+            return defaultY;
         }
 
         private bool TryResolveNextAnchor(string factionId, out FactionSpawnAnchor result)
@@ -400,12 +572,161 @@ namespace Minecraft.Faction
                 PlayerTarget = ResolvePlayerTarget(),
                 CoreTarget = ResolveCoreTarget(),
                 RegroupPoint = regroup,
+                IdleTrainingTarget = m_IdleTrainingDummy,
                 CoreHealthNormalized = ResolveCoreHealthNormalized(),
                 AllowAwayTerrainEdit = preset != null && preset.AllowAwayTerrainEdit,
                 HomeCenter = homeCenter,
                 HomeRadius = preset != null ? preset.HomeTerritoryRadius : 24f,
                 ObjectivePreset = preset,
             };
+        }
+
+        private void EnsureIdleTrainingDummy()
+        {
+            if (!m_EnableIdleTrainingDummy)
+            {
+                if (m_IdleTrainingDummy != null)
+                {
+                    Destroy(m_IdleTrainingDummy.gameObject);
+                    m_IdleTrainingDummy = null;
+                }
+
+                return;
+            }
+
+            if (m_IdleTrainingDummy != null && IsTrainingDummyAlive(m_IdleTrainingDummy))
+            {
+                return;
+            }
+
+            if (m_IdleTrainingDummy != null)
+            {
+                Destroy(m_IdleTrainingDummy.gameObject);
+                m_IdleTrainingDummy = null;
+            }
+
+            Vector3 spawnPos = ResolveIdleTrainingSpawnPosition();
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            go.name = $"{ResolveActiveFactionId()}_IdleTrainingDummy";
+            go.transform.SetParent(transform);
+            go.transform.position = spawnPos;
+            go.transform.rotation = Quaternion.identity;
+
+            CrowdAgentController controller = go.GetComponent<CrowdAgentController>();
+            if (controller == null)
+            {
+                controller = go.AddComponent<CrowdAgentController>();
+            }
+
+            controller.MoveSpeed = 0f;
+            controller.VerticalMoveSpeed = 0f;
+            controller.RotationSpeed = 0f;
+            controller.CombatRole = CombatActorRole.Enemy;
+            controller.CombatMaxHealth = Mathf.Max(1f, m_IdleTrainingMaxHealth);
+            controller.CombatInitialHealth = controller.CombatMaxHealth;
+            controller.CombatAttackPower = 0f;
+            controller.CombatDefense = 0f;
+            controller.DestroyOnDespawn = false;
+
+            if (controller.CombatRuntime != null)
+            {
+                controller.CombatRuntime.Role = controller.CombatRole;
+                controller.CombatRuntime.DisplayName = go.name;
+                controller.CombatRuntime.MaxHealth = controller.CombatMaxHealth;
+                controller.CombatRuntime.CurrentHealth = controller.CombatMaxHealth;
+                controller.CombatRuntime.AttackPower = controller.CombatAttackPower;
+                controller.CombatRuntime.Defense = controller.CombatDefense;
+                controller.CombatRuntime.Position = go.transform.position;
+                controller.CombatRuntime.LifecycleState = CombatLifecycleState.Alive;
+            }
+
+            m_IdleTrainingDummy = go.transform;
+        }
+
+        private bool IsTrainingDummyAlive(Transform dummy)
+        {
+            if (dummy == null || !dummy.gameObject.activeInHierarchy)
+            {
+                return false;
+            }
+
+            if (!dummy.TryGetComponent(out CrowdAgentController controller))
+            {
+                return false;
+            }
+
+            return controller.CombatRuntime != null && controller.CombatRuntime.IsAlive;
+        }
+
+        private Vector3 ResolveIdleTrainingSpawnPosition()
+        {
+            Vector3 origin = ResolveIdleTrainingOrigin();
+            float radius = Mathf.Max(1f, m_IdleTrainingSpawnRadius);
+            Vector2 offset2D = UnityEngine.Random.insideUnitCircle;
+            if (offset2D.sqrMagnitude <= 0.0001f)
+            {
+                offset2D = Vector2.right;
+            }
+
+            offset2D = offset2D.normalized * radius;
+            return origin + new Vector3(offset2D.x, 0f, offset2D.y);
+        }
+
+        private Vector3 ResolveIdleTrainingOrigin()
+        {
+            Transform anchor = ResolvePrimaryAnchorTransform();
+            if (anchor != null)
+            {
+                return anchor.position;
+            }
+
+            Transform regroup = ResolveRegroupPoint();
+            if (regroup != null)
+            {
+                return regroup.position;
+            }
+
+            if (m_CoreTarget != null)
+            {
+                return m_CoreTarget.position;
+            }
+
+            return transform.position;
+        }
+
+        private Transform ResolvePrimaryAnchorTransform()
+        {
+            if (m_SpawnAnchors == null || m_SpawnAnchors.Count == 0)
+            {
+                return null;
+            }
+
+            string factionId = ResolveActiveFactionId();
+            for (int i = 0; i < m_SpawnAnchors.Count; i++)
+            {
+                FactionSpawnAnchor anchor = m_SpawnAnchors[i];
+                if (anchor == null || !anchor.Enabled || anchor.AnchorTransform == null)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(anchor.FactionId)
+                    && !string.Equals(anchor.FactionId, factionId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                return anchor.AnchorTransform;
+            }
+
+            return null;
+        }
+
+        private string ResolveActiveFactionId()
+        {
+            return m_ActiveProfile != null && !string.IsNullOrWhiteSpace(m_ActiveProfile.FactionId)
+                ? m_ActiveProfile.FactionId
+                : "hostile-assault-v1";
         }
 
         private void CleanupDeadAgents()

@@ -42,10 +42,10 @@ namespace Minecraft
 
         [Header("Overlay")]
         [SerializeField] private Texture2D m_OverlayTexture;
-        [Range(0f, 1f)] public float OverlayStrength = 1.0f;
-        public Color InfectingColor = new Color(0.35f, 0.95f, 0.65f, 0.88f);
-        public Color DamagedColor = new Color(0.95f, 0.28f, 0.2f, 0.95f);
-        public Color CompletedColor = new Color(0.15f, 1.0f, 0.62f, 1.0f);
+        [Range(0f, 1f)] public float OverlayStrength = 0.72f;
+        public Color InfectingColor = new Color(0.32f, 0.80f, 0.56f, 0.72f);
+        public Color DamagedColor = new Color(0.78f, 0.27f, 0.22f, 0.76f);
+        public Color CompletedColor = new Color(0.18f, 0.78f, 0.52f, 0.80f);
 
         [Header("Auto Infection")]
         public bool AutoInfectFromWorldPlayer = true;
@@ -111,6 +111,45 @@ namespace Minecraft
             state.StateTime = 0f;
             state.LastTouchedTime = Time.time;
             s_Instance.m_CellStates[worldBlockPos] = state;
+        }
+
+        public static bool TryGetStateAtBlockPosition(Vector3Int worldBlockPos, out FungalState state)
+        {
+            if (s_Instance == null)
+            {
+                state = FungalState.None;
+                return false;
+            }
+
+            return s_Instance.TryGetStateAtWorldBlockInternal(worldBlockPos, out state);
+        }
+
+        public static bool IsCompletedAtBlockPosition(Vector3Int worldBlockPos)
+        {
+            return TryGetStateAtBlockPosition(worldBlockPos, out FungalState state) && state == FungalState.Completed;
+        }
+
+        public static bool TryGetStateAtWorldPosition(Vector3 worldPosition, out FungalState state)
+        {
+            state = FungalState.None;
+
+            IWorld world = World.Active;
+            if (world == null || !world.Initialized)
+            {
+                return false;
+            }
+
+            if (!TryResolveGroundBlock(world, worldPosition, out Vector3Int groundPos))
+            {
+                return false;
+            }
+
+            return TryGetStateAtBlockPosition(groundPos, out state);
+        }
+
+        public static bool IsCompletedAtWorldPosition(Vector3 worldPosition)
+        {
+            return TryGetStateAtWorldPosition(worldPosition, out FungalState state) && state == FungalState.Completed;
         }
 
         private void Awake()
@@ -211,15 +250,24 @@ namespace Minecraft
             ShaderUtility.FungalOverlayTexture = m_OverlayTexture != null ? m_OverlayTexture : m_RuntimeFallbackOverlay;
             ShaderUtility.FungalMapOriginXZ = new Vector2(m_MapOriginXZ.x, m_MapOriginXZ.y);
             ShaderUtility.FungalMapSize = m_StateMapTexture != null ? m_StateMapTexture.width : 0f;
-            ShaderUtility.FungalOverlayStrength = OverlayStrength;
-            ShaderUtility.FungalStateColorInfecting = WithMinAlpha(InfectingColor, 0.65f);
-            ShaderUtility.FungalStateColorDamaged = WithMinAlpha(DamagedColor, 0.75f);
-            ShaderUtility.FungalStateColorCompleted = WithMinAlpha(CompletedColor, 0.70f);
+            ShaderUtility.FungalOverlayStrength = OverlayStrength * 0.62f;
+            ShaderUtility.FungalStateColorInfecting = ToneColor(WithMinAlpha(InfectingColor, 0.50f), 0.90f, 0.88f);
+            ShaderUtility.FungalStateColorDamaged = ToneColor(WithMinAlpha(DamagedColor, 0.55f), 0.90f, 0.90f);
+            ShaderUtility.FungalStateColorCompleted = ToneColor(WithMinAlpha(CompletedColor, 0.55f), 0.86f, 0.86f);
         }
 
         private static Color WithMinAlpha(Color color, float minAlpha)
         {
             color.a = Mathf.Max(minAlpha, color.a);
+            return color;
+        }
+
+        private static Color ToneColor(Color color, float rgbScale, float alphaScale)
+        {
+            color.r *= rgbScale;
+            color.g *= rgbScale;
+            color.b *= rgbScale;
+            color.a *= alphaScale;
             return color;
         }
 
@@ -316,6 +364,18 @@ namespace Minecraft
 
             m_CellStates[groundPos] = cell;
             return true;
+        }
+
+        private bool TryGetStateAtWorldBlockInternal(Vector3Int worldBlockPos, out FungalState state)
+        {
+            if (m_CellStates.TryGetValue(worldBlockPos, out CellState cell))
+            {
+                state = cell.State;
+                return true;
+            }
+
+            state = FungalState.None;
+            return false;
         }
 
         private static bool TryResolveGroundBlock(IWorld world, Vector3 worldPosition, out Vector3Int groundPos)

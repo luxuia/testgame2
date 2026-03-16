@@ -98,20 +98,23 @@ namespace ToaruUnity.UI
 
         private void Awake()
         {
+            if (!m_ViewContainer)
+            {
+                m_ViewContainer = transform;
+            }
+
+            if (!m_ViewLoader)
+            {
+                m_ViewLoader = GetComponent<ViewLoader>() ?? GetComponentInChildren<ViewLoader>(true);
+            }
+
             m_KeyComparer = CreateViewKeyComparer() ?? throw new NullReferenceException("ViewKeyComparer");
             m_Stack = new ViewStack(m_StackMinGrow, m_StackMaxGrow, m_KeyComparer);
             m_Prefabs = new HybridDictionary<object, ViewPrefab>(m_KeyComparer);
             m_ViewPool = new HybridDictionary<object, AbstractView>(m_KeyComparer);
 
-            if (!m_ViewContainer)
-            {
-                Debug.LogError("ViewContainer is missing!");
-            }
-
-            if (!m_ViewLoader)
-            {
-                Debug.LogError("ViewLoader is missing!");
-            }
+            if (!m_ViewContainer) Debug.LogError("ViewContainer is missing!");
+            if (!m_ViewLoader) Debug.LogError("ViewLoader is missing!");
         }
 
         private void OnDestroy()

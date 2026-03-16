@@ -54,6 +54,14 @@ namespace Minecraft.Combat
         Summon = 5,
     }
 
+    public enum CombatLifecycleState : byte
+    {
+        Alive = 0,
+        Dying = 1,
+        Dead = 2,
+        Despawned = 3,
+    }
+
     [Serializable]
     public sealed class CombatRuntimeConfig
     {
@@ -213,22 +221,117 @@ namespace Minecraft.Combat
         public float Defense = 2f;
 
         public Vector3 Position;
+        public CombatLifecycleState LifecycleState = CombatLifecycleState.Alive;
 
-        public bool IsAlive => CurrentHealth > 0f;
+        public event Action<CombatEntityRuntime, float> OnHit;
+        public event Action<CombatEntityRuntime, float> OnDamageApplied;
+        public event Action<CombatEntityRuntime> OnDeath;
+        public event Action<CombatEntityRuntime> OnDespawn;
+
+        [NonSerialized] private bool m_DeathEventRaised;
+        [NonSerialized] private bool m_DespawnEventRaised;
+
+        public bool IsAlive => LifecycleState == CombatLifecycleState.Alive && CurrentHealth > 0f;
+        public bool CanAct => LifecycleState == CombatLifecycleState.Alive && CurrentHealth > 0f;
+        public bool CanAcceptHit => LifecycleState == CombatLifecycleState.Alive && CurrentHealth > 0f;
+        public bool IsDeadOrBeyond => LifecycleState == CombatLifecycleState.Dead || LifecycleState == CombatLifecycleState.Despawned;
+
+        public bool TryApplyHit(float amount, out float appliedDamage)
+        {
+            return TryApplyHit(amount, out appliedDamage, out _);
+        }
+
+        public bool TryApplyHit(float amount, out float appliedDamage, out string failureReason)
+        {
+            appliedDamage = 0f;
+            if (!CanAcceptHit)
+            {
+                failureReason = "Target is missing, dead, or already despawned.";
+                return false;
+            }
+
+            float clamped = Mathf.Max(0f, amount);
+            OnHit?.Invoke(this, clamped);
+
+            float before = CurrentHealth;
+            CurrentHealth = Mathf.Max(0f, CurrentHealth - clamped);
+            appliedDamage = Mathf.Max(0f, before - CurrentHealth);
+
+            OnDamageApplied?.Invoke(this, appliedDamage);
+
+            if (CurrentHealth <= 0f)
+            {
+                EnterDeathLifecycle();
+            }
+
+            failureReason = null;
+            return true;
+        }
 
         public float ApplyDamage(float amount)
         {
-            float clamped = Mathf.Max(0f, amount);
-            CurrentHealth = Mathf.Max(0f, CurrentHealth - clamped);
-            return clamped;
+            return TryApplyHit(amount, out float applied, out _) ? applied : 0f;
         }
 
         public float Heal(float amount)
         {
+            if (LifecycleState != CombatLifecycleState.Alive || CurrentHealth <= 0f)
+            {
+                return 0f;
+            }
+
             float clamped = Mathf.Max(0f, amount);
             float before = CurrentHealth;
             CurrentHealth = Mathf.Min(MaxHealth, CurrentHealth + clamped);
             return CurrentHealth - before;
+        }
+
+        public bool EnterDeathLifecycle()
+        {
+            if (LifecycleState == CombatLifecycleState.Despawned)
+            {
+                return false;
+            }
+
+            if (LifecycleState == CombatLifecycleState.Alive)
+            {
+                LifecycleState = CombatLifecycleState.Dying;
+            }
+
+            if (LifecycleState != CombatLifecycleState.Dead)
+            {
+                LifecycleState = CombatLifecycleState.Dead;
+            }
+
+            if (!m_DeathEventRaised)
+            {
+                m_DeathEventRaised = true;
+                OnDeath?.Invoke(this);
+            }
+
+            return true;
+        }
+
+        public bool TryMarkDespawned()
+        {
+            if (LifecycleState == CombatLifecycleState.Despawned)
+            {
+                return false;
+            }
+
+            if (LifecycleState == CombatLifecycleState.Alive)
+            {
+                return false;
+            }
+
+            LifecycleState = CombatLifecycleState.Despawned;
+            if (!m_DespawnEventRaised)
+            {
+                m_DespawnEventRaised = true;
+                OnDespawn?.Invoke(this);
+            }
+
+            return true;
         }
     }
 
@@ -315,7 +418,7 @@ namespace Minecraft.Combat
 
         public CombatActionResult Execute(in CombatActionRequest request)
         {
-            if (request.Actor == null || !request.Actor.IsAlive)
+            if (request.Actor == null || !request.Actor.CanAct)
             {
                 return CombatActionResult.Fail("Actor is missing or dead.");
             }
@@ -339,7 +442,7 @@ namespace Minecraft.Combat
 
         private CombatActionResult ExecuteAttack(in CombatActionRequest request)
         {
-            if (request.TargetEntity == null || !request.TargetEntity.IsAlive)
+            if (request.TargetEntity == null || !request.TargetEntity.CanAcceptHit)
             {
                 return CombatActionResult.Fail("Attack target is missing or dead.");
             }
@@ -348,12 +451,17 @@ namespace Minecraft.Combat
                 request.Actor.AttackPower,
                 request.TargetEntity.Defense,
                 request.Context);
-            request.TargetEntity.ApplyDamage(damage);
+            if (!request.TargetEntity.TryApplyHit(damage, out float appliedDamage, out string failureReason))
+            {
+                return CombatActionResult.Fail(string.IsNullOrWhiteSpace(failureReason)
+                    ? "Attack target is missing or dead."
+                    : failureReason);
+            }
 
             return new CombatActionResult
             {
                 Success = true,
-                DamageDealt = damage,
+                DamageDealt = appliedDamage,
                 AnimationActionName = ResolveDefaultAnimationActionName(
                     CombatActionKind.Attack,
                     request.PreferredAnimationActionName),
@@ -415,17 +523,23 @@ namespace Minecraft.Combat
             switch (effect.EffectType)
             {
                 case CombatSkillEffectType.Damage:
-                    if (request.TargetEntity == null || !request.TargetEntity.IsAlive)
+                    if (request.TargetEntity == null || !request.TargetEntity.CanAcceptHit)
                     {
-                    return CombatActionResult.Fail("Damage effect requires a live target.");
+                        return CombatActionResult.Fail("Damage effect requires a live target.");
                     }
 
                     float scaledDamage = EvaluateDamage(
                         request.Actor.AttackPower * Mathf.Max(0f, effect.Magnitude),
                         request.TargetEntity.Defense,
                         request.Context);
-                    request.TargetEntity.ApplyDamage(scaledDamage);
-                    return new CombatActionResult { Success = true, DamageDealt = scaledDamage };
+                    if (!request.TargetEntity.TryApplyHit(scaledDamage, out float appliedDamage, out string failureReason))
+                    {
+                        return CombatActionResult.Fail(string.IsNullOrWhiteSpace(failureReason)
+                            ? "Damage effect requires a live target."
+                            : failureReason);
+                    }
+
+                    return new CombatActionResult { Success = true, DamageDealt = appliedDamage };
 
                 case CombatSkillEffectType.Heal:
                     CombatEntityRuntime healTarget = request.TargetEntity ?? request.Actor;

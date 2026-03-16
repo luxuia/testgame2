@@ -418,13 +418,14 @@ namespace Minecraft.Pathfinding
             for (int i = 0; i < Agents.Count; i++)
             {
                 CrowdAgentController agent = Agents[i];
-                if (agent == null || !agent.isActiveAndEnabled)
+                if (!CanAgentNavigate(agent))
                 {
                     continue;
                 }
 
                 if (!m_AgentRuntimeStates.TryGetValue(agent, out AgentRuntimeState runtime) || !runtime.HasNextNode)
                 {
+                    agent.ForceIdleAnimation();
                     continue;
                 }
 
@@ -433,6 +434,7 @@ namespace Minecraft.Pathfinding
                     runtime.CurrentPlanarVelocity = Vector2.zero;
                     runtime.DesiredPlanarVelocity = Vector2.zero;
                     m_AgentRuntimeStates[agent] = runtime;
+                    agent.ForceIdleAnimation();
                     continue;
                 }
 
@@ -757,7 +759,7 @@ namespace Minecraft.Pathfinding
             for (int i = 0; i < Agents.Count; i++)
             {
                 CrowdAgentController agent = Agents[i];
-                if (agent == null || !agent.isActiveAndEnabled)
+                if (!CanAgentNavigate(agent))
                 {
                     continue;
                 }
@@ -986,7 +988,7 @@ namespace Minecraft.Pathfinding
             for (int i = 0; i < Agents.Count; i++)
             {
                 CrowdAgentController agent = Agents[i];
-                if (agent == null || !agent.isActiveAndEnabled)
+                if (!CanAgentNavigate(agent))
                 {
                     continue;
                 }
@@ -1159,7 +1161,7 @@ namespace Minecraft.Pathfinding
                     for (int i = 0; i < list.Count; i++)
                     {
                         CrowdAgentController agent = list[i];
-                        if (agent == null || !agent.isActiveAndEnabled)
+                        if (!CanAgentNavigate(agent))
                         {
                             continue;
                         }
@@ -1211,6 +1213,16 @@ namespace Minecraft.Pathfinding
             float min = Mathf.Max(0.1f, RepathMinInterval);
             float max = Mathf.Max(min, RepathMaxInterval);
             return Random.Range(min, max);
+        }
+
+        private static bool CanAgentNavigate(CrowdAgentController agent)
+        {
+            if (agent == null || !agent.isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            return agent.CombatRuntime == null || agent.CombatRuntime.CanAct;
         }
 
         private bool IsWithinNoPathfindRadius(CrowdAgentController agent, Vector3Int target)

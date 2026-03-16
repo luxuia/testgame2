@@ -22,6 +22,7 @@ namespace Minecraft.UI.Framework
 
         private void Awake()
         {
+            ResolveReferencesIfNeeded();
             ApplyLayerOrder();
             ApplyBlockingState();
         }
@@ -65,6 +66,17 @@ namespace Minecraft.UI.Framework
             }
 
             group.blocksRaycasts = blocksRaycasts;
+        }
+
+        private void ResolveReferencesIfNeeded()
+        {
+            if (!m_HUDLayer) m_HUDLayer = transform.Find("HUDLayer");
+            if (!m_SidePanelLayer) m_SidePanelLayer = transform.Find("SidePanelLayer");
+            if (!m_CombatOverlayLayer) m_CombatOverlayLayer = transform.Find("CombatOverlayLayer");
+            if (!m_ModalLayer) m_ModalLayer = transform.Find("ModalLayer");
+
+            if (!m_HUDBlockerGroup && m_HUDLayer) m_HUDBlockerGroup = m_HUDLayer.GetComponent<CanvasGroup>();
+            if (!m_SidePanelBlockerGroup && m_SidePanelLayer) m_SidePanelBlockerGroup = m_SidePanelLayer.GetComponent<CanvasGroup>();
         }
     }
 }

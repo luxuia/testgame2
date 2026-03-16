@@ -21,6 +21,7 @@ namespace Minecraft.UI.Framework
         protected override void OnCreate()
         {
             base.OnCreate();
+            ResolveSlotsIfNeeded();
             if (m_CloseButton)
             {
                 m_CloseButton.onClick.AddListener(CloseSelf);
@@ -40,6 +41,22 @@ namespace Minecraft.UI.Framework
         private void CloseSelf()
         {
             gameObject.SetActive(false);
+        }
+
+        private void ResolveSlotsIfNeeded()
+        {
+            if (!m_TitleSlot) m_TitleSlot = Transform.Find("TitleSlot") as RectTransform;
+            if (!m_ContentRoot) m_ContentRoot = Transform.Find("ContentRoot") as RectTransform;
+            if (!m_PaginationSlot) m_PaginationSlot = Transform.Find("PaginationSlot") as RectTransform;
+
+            if (!m_CloseButton)
+            {
+                Transform close = Transform.Find("CloseButton");
+                if (close)
+                {
+                    m_CloseButton = close.GetComponent<Button>();
+                }
+            }
         }
     }
 }

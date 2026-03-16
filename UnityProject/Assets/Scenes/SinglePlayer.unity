@@ -124,6 +124,37 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &39052651
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 39052652}
+  m_Layer: 0
+  m_Name: HostileAssaultCore
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &39052652
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 39052651}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 65, z: -35}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &160148885
 GameObject:
   m_ObjectHideFlags: 0
@@ -163,6 +194,54 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 160148885}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &247256767
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 247256769}
+  - component: {fileID: 247256768}
+  m_Layer: 0
+  m_Name: UIBootstrap
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &247256768
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 247256767}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a10deea5c83139744af2db54bb6833a6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_UIRootPrefab: {fileID: 2850394366733996720, guid: eecf3297339634148a88dbfd7eb30337,
+    type: 3}
+  m_RuntimeParent: {fileID: 0}
+  m_OpenDefaultViewsOnStart: 1
+--- !u!4 &247256769
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 247256767}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -1279,6 +1358,37 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!1 &732210948
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 732210949}
+  m_Layer: 0
+  m_Name: HostileAssaultAnchor_D
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &732210949
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 732210948}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 18, y: 65, z: -30}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &829172838
 GameObject:
   m_ObjectHideFlags: 0
@@ -1614,6 +1724,109 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!1 &978884397
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 978884399}
+  - component: {fileID: 978884398}
+  m_Layer: 0
+  m_Name: Faction Director
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &978884398
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 978884397}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18d4ae515b1b4864953ac09bddb2c118, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_EnforceSingleHostileProfileV1: 1
+  m_ForcedV1FactionId: hostile-assault-v1
+  m_CoreTarget: {fileID: 39052652}
+  m_RegroupPoint: {fileID: 1837337220}
+  m_DefaultObjectivePreset: {fileID: 11400000, guid: 0467eb5f48373b240bb9da1e5907bc23,
+    type: 2}
+  m_DefaultPlannerPreset:
+    MaxPlanDepth: 3
+    ReplanCooldownSec: 0.2
+    GoalSwitchHysteresis: 0.75
+    PlannerBudgetPerTick: 64
+    EmergencyOverrideCoreHpPct: 0.25
+    ActionFailureRetryLimit: 2
+    PlanStaleTimeoutSec: 1.2
+    HomeBiasWeight: 1
+    AwaySafetyWeight: 1
+  m_FactionProfiles:
+  - FactionId: hostile-assault-v1
+    Enabled: 1
+    IsPrimaryV1: 1
+    AgentPrefab: {fileID: 100000, guid: bc119a5e0660f66459fd40ac6aaa256e, type: 3}
+    CombatRole: 3
+    AliveCap: 20
+    Waves:
+    - WaveId: wave-01
+      SpawnBudget: 6
+      SpawnPerTick: 2
+      SpawnIntervalSec: 8
+    - WaveId: wave-02
+      SpawnBudget: 8
+      SpawnPerTick: 2
+      SpawnIntervalSec: 10
+  m_SpawnAnchors:
+  - AnchorId: anchor-a
+    AnchorTransform: {fileID: 1662094691}
+    FactionId: hostile-assault-v1
+    Enabled: 1
+  - AnchorId: anchor-b
+    AnchorTransform: {fileID: 1903765838}
+    FactionId: hostile-assault-v1
+    Enabled: 1
+  - AnchorId: anchor-c
+    AnchorTransform: {fileID: 1343743254}
+    FactionId: hostile-assault-v1
+    Enabled: 1
+  - AnchorId: anchor-d
+    AnchorTransform: {fileID: 732210949}
+    FactionId: hostile-assault-v1
+    Enabled: 1
+  m_InitialWaveDelaySec: 3
+  m_FallbackWaveIntervalSec: 10
+  m_AttachSpawnedAgentsToCrowdRoot: 1
+  m_AgentRuntimeParent: {fileID: 0}
+  m_CombatChunkPreloadRadius: 2
+  m_CombatChunkPreloadIntervalSec: 0.5
+  m_EnableIdleTrainingDummy: 1
+  m_IdleTrainingSpawnRadius: 3.5
+  m_IdleTrainingMaxHealth: 1200
+  m_EnableRuntimeLog: 1
+--- !u!4 &978884399
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 978884397}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 120, z: -30}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &996112061
 GameObject:
   m_ObjectHideFlags: 0
@@ -2112,6 +2325,37 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1284198142}
   m_CullTransparentMesh: 1
+--- !u!1 &1343743253
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1343743254}
+  m_Layer: 0
+  m_Name: HostileAssaultAnchor_C
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1343743254
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1343743253}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -18, y: 65, z: -30}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1495746135
 GameObject:
   m_ObjectHideFlags: 0
@@ -2595,6 +2839,37 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b0eb54ebf24ca8d48afc774dc00b1b3e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!1 &1662094690
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1662094691}
+  m_Layer: 0
+  m_Name: HostileAssaultAnchor_A
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1662094691
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1662094690}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -18, y: 65, z: -10}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1678576740
 GameObject:
   m_ObjectHideFlags: 0
@@ -3100,6 +3375,68 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_HorizontalFit: 2
   m_VerticalFit: 2
+--- !u!1 &1837337219
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1837337220}
+  m_Layer: 0
+  m_Name: HostileAssaultRegroup
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1837337220
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1837337219}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 65, z: -55}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1903765837
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1903765838}
+  m_Layer: 0
+  m_Name: HostileAssaultAnchor_B
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1903765838
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1903765837}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 18, y: 65, z: -10}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1978130906
 GameObject:
   m_ObjectHideFlags: 0
@@ -3143,10 +3480,10 @@ MonoBehaviour:
   SpawnSearchRadius: 16
   TargetTransform: {fileID: 2378111722045569734}
   StaticTarget: {x: 0, y: 64, z: 0}
-  FlowFieldMaxNodes: 250
+  FlowFieldMaxNodes: 12000
   FlowFieldCacheLifetime: 2
   FlowFieldSearchRadius: 11
-  FlowFieldPrepareInterval: 1.2
+  FlowFieldPrepareInterval: 0.2
   TickInterval: 0.05
   RepathMinInterval: 1
   RepathMaxInterval: 2
@@ -3282,21 +3619,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 5058929197285165871, guid: 168db0e3e15880d4cbea8de4699d3042,
-        type: 3}
-      propertyPath: m_ApplyRootMotion
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5058929197294664029, guid: 168db0e3e15880d4cbea8de4699d3042,
-        type: 3}
-      propertyPath: m_TagString
-      value: Untagged
-      objectReference: {fileID: 0}
-    - target: {fileID: 5058929197294953661, guid: 168db0e3e15880d4cbea8de4699d3042,
-        type: 3}
-      propertyPath: m_LocalPosition.y
-      value: -1
-      objectReference: {fileID: 0}
     - target: {fileID: 7418641335067498741, guid: 168db0e3e15880d4cbea8de4699d3042,
         type: 3}
       propertyPath: m_HandBlockInput
@@ -3393,3 +3715,11 @@ SceneRoots:
   - {fileID: 1743795463}
   - {fileID: 1978130908}
   - {fileID: 1723804281}
+  - {fileID: 247256769}
+  - {fileID: 978884399}
+  - {fileID: 39052652}
+  - {fileID: 1837337220}
+  - {fileID: 1662094691}
+  - {fileID: 1903765838}
+  - {fileID: 1343743254}
+  - {fileID: 732210949}

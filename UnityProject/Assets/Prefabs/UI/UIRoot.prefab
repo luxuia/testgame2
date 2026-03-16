@@ -54,6 +54,7 @@ GameObject:
   - component: {fileID: 5490330993555857922}
   - component: {fileID: 7871873003223750421}
   - component: {fileID: 6540696332180317952}
+  - component: {fileID: 1593798499422477618}
   m_Layer: 0
   m_Name: UIRoot
   m_TagString: Untagged
@@ -218,6 +219,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Entries: []
+  m_HUDRootPrefab: {fileID: 3598710527290435565, guid: 72312d11b7ef58f42ac53df4108bcbb8,
+    type: 3}
+  m_SidePanelPrefab: {fileID: 1670123947446571301, guid: ff9166526bd810345b3af9a235e769a1,
+    type: 3}
+  m_ModalTemplatePrefab: {fileID: 5279512873187617546, guid: 28ec980b2a415294db45c31384932b9d,
+    type: 3}
+  m_CombatOverlayPrefab: {fileID: 2669949864133911293, guid: b676975f7362fe24da6677bdb4140ca6,
+    type: 3}
 --- !u!114 &5490330993555857922
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -267,6 +276,21 @@ MonoBehaviour:
   m_HUDBlockerGroup: {fileID: 0}
   m_SidePanelBlockerGroup: {fileID: 0}
   m_BlockLowerLayersWhenModalActive: 1
+--- !u!114 &1593798499422477618
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2850394366733996720}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe3903d8dd7c12a49a8e7efdc56f9ff9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_UIManager: {fileID: 0}
+  m_ViewLoader: {fileID: 0}
+  m_DefaultContainer: {fileID: 0}
 --- !u!1 &7324105042645501687
 GameObject:
   m_ObjectHideFlags: 0

@@ -18,6 +18,7 @@ namespace Minecraft.UI.Framework
         protected override void OnCreate()
         {
             base.OnCreate();
+            ResolveSlotsIfNeeded();
             ApplyCollapsedState(m_IsCollapsed);
         }
 
@@ -37,6 +38,31 @@ namespace Minecraft.UI.Framework
             if (m_PanelBody)
             {
                 m_PanelBody.SetActive(!collapsed);
+            }
+        }
+
+        private void ResolveSlotsIfNeeded()
+        {
+            if (!m_PanelBody)
+            {
+                Transform body = Transform.Find("PanelBody");
+                if (body)
+                {
+                    m_PanelBody = body.gameObject;
+                }
+            }
+
+            if (m_TabSlots == null || m_TabSlots.Length == 0)
+            {
+                string[] names = { "Tab_Build", "Tab_Slime", "Tab_Adjutant", "Tab_Resource", "Tab_Quest", "Tab_Diplomacy" };
+                m_TabSlots = new GameObject[names.Length];
+                Transform body = m_PanelBody ? m_PanelBody.transform : Transform.Find("PanelBody");
+
+                for (int i = 0; i < names.Length; i++)
+                {
+                    Transform tab = body ? body.Find(names[i]) : null;
+                    m_TabSlots[i] = tab ? tab.gameObject : null;
+                }
             }
         }
     }

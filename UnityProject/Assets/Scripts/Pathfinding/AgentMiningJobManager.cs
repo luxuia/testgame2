@@ -397,7 +397,7 @@ namespace Minecraft.Pathfinding
                 CrowdAgentController agent = entry.Key;
                 AgentAssignment assignment = entry.Value;
 
-                if (agent == null || !agent.isActiveAndEnabled)
+                if (!CanAgentReceiveAssignments(agent))
                 {
                     m_AssignmentCleanupAgentsBuffer.Add(agent);
                     continue;
@@ -447,7 +447,7 @@ namespace Minecraft.Pathfinding
             for (int i = 0; i < Coordinator.Agents.Count; i++)
             {
                 CrowdAgentController agent = Coordinator.Agents[i];
-                if (agent == null || !agent.isActiveAndEnabled)
+                if (!CanAgentReceiveAssignments(agent))
                 {
                     continue;
                 }
@@ -520,7 +520,7 @@ namespace Minecraft.Pathfinding
             for (int i = m_UnassignedAgentsBuffer.Count - 1; i >= 0; i--)
             {
                 CrowdAgentController agent = m_UnassignedAgentsBuffer[i];
-                if (agent == null || !agent.isActiveAndEnabled)
+                if (!CanAgentReceiveAssignments(agent))
                 {
                     m_UnassignedAgentsBuffer.RemoveAt(i);
                     continue;
@@ -544,7 +544,7 @@ namespace Minecraft.Pathfinding
             for (int i = 0; i < m_UnassignedAgentsBuffer.Count; i++)
             {
                 CrowdAgentController agent = m_UnassignedAgentsBuffer[i];
-                if (agent == null || !agent.isActiveAndEnabled)
+                if (!CanAgentReceiveAssignments(agent))
                 {
                     continue;
                 }
@@ -685,7 +685,7 @@ namespace Minecraft.Pathfinding
             foreach (KeyValuePair<CrowdAgentController, AgentAssignment> entry in m_Assignments)
             {
                 CrowdAgentController agent = entry.Key;
-                if (agent == null || !agent.isActiveAndEnabled)
+                if (!CanAgentReceiveAssignments(agent))
                 {
                     continue;
                 }
@@ -710,7 +710,7 @@ namespace Minecraft.Pathfinding
             {
                 CrowdAgentController agent = entry.Key;
                 AgentAssignment assignment = entry.Value;
-                if (agent == null || !agent.isActiveAndEnabled)
+                if (!CanAgentReceiveAssignments(agent))
                 {
                     continue;
                 }
@@ -767,7 +767,7 @@ namespace Minecraft.Pathfinding
             {
                 CrowdAgentController agent = entry.Key;
                 AgentAssignment assignment = entry.Value;
-                if (agent == null || !agent.isActiveAndEnabled || !m_BlockJobs.ContainsKey(assignment.Block))
+                if (!CanAgentReceiveAssignments(agent) || !m_BlockJobs.ContainsKey(assignment.Block))
                 {
                     continue;
                 }
@@ -1042,6 +1042,16 @@ namespace Minecraft.Pathfinding
                 Coordinator.NoPathfindRadius = m_CachedNoPathfindRadius;
                 m_HasCachedNoPathfindRadius = false;
             }
+        }
+
+        private static bool CanAgentReceiveAssignments(CrowdAgentController agent)
+        {
+            if (agent == null || !agent.isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            return agent.CombatRuntime == null || agent.CombatRuntime.CanAct;
         }
 
         private void OnDisable()

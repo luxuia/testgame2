@@ -32,7 +32,7 @@
 
 ## 6. Validation
 
-- [ ] 6.1 Validate fixed spawn consistency by replaying multiple wave starts with same anchor setup.
+- [x] 6.1 Validate fixed spawn consistency by replaying multiple wave starts with same anchor setup.
 - [ ] 6.2 Validate V1 scope guard by confirming non-primary faction profiles stay inactive.
 - [ ] 6.3 Validate shared pipeline behavior for both normal attacks and denied away-terrain actions.
 - [ ] 6.4 Validate fallback and recovery loop after repeated plan failures.

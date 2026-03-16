@@ -207,22 +207,44 @@ namespace Minecraft.Pathfinding
 
         public static Vector3Int? FindNearestWalkableNode(Vector3Int pos, IWorld world, int searchRadius)
         {
-            float bestDist = float.MaxValue;
+            float bestDistSq = float.MaxValue;
+            int bestAbsDy = int.MaxValue;
+            int bestSignedDy = int.MinValue;
             Vector3Int? bestPos = null;
 
             for (int x = -searchRadius; x <= searchRadius; x++)
             {
                 for (int z = -searchRadius; z <= searchRadius; z++)
                 {
-                    for (int y = -searchRadius; y <= searchRadius; y++)
+                    for (int y = 0; y <= searchRadius; y++)
                     {
-                        Vector3Int checkPos = pos + new Vector3Int(x, y, z);
-                        if (IsWalkable(checkPos, world))
+                        for (int sign = 0; sign < 2; sign++)
                         {
-                            float dist = Vector3Int.Distance(pos, checkPos);
-                            if (dist < bestDist)
+                            int dy = sign == 0 ? y : -y;
+                            if (y == 0 && sign == 1)
                             {
-                                bestDist = dist;
+                                continue;
+                            }
+
+                            Vector3Int checkPos = pos + new Vector3Int(x, dy, z);
+                            if (!IsWalkable(checkPos, world))
+                            {
+                                continue;
+                            }
+
+                            float distSq = x * x + dy * dy + z * z;
+                            int absDy = Mathf.Abs(dy);
+                            bool betterDistance = distSq < bestDistSq - 0.0001f;
+                            bool tieDistance = Mathf.Abs(distSq - bestDistSq) <= 0.0001f;
+                            bool betterVertical = tieDistance && absDy < bestAbsDy;
+                            bool tieVertical = tieDistance && absDy == bestAbsDy;
+                            bool preferHigherLevel = tieVertical && dy > bestSignedDy;
+
+                            if (betterDistance || betterVertical || preferHigherLevel)
+                            {
+                                bestDistSq = distSq;
+                                bestAbsDy = absDy;
+                                bestSignedDy = dy;
                                 bestPos = checkPos;
                             }
                         }

@@ -1,4 +1,5 @@
 ﻿using System;
+using Minecraft.Building;
 using Minecraft.Collections;
 using Minecraft.Configurations;
 using UnityEngine;
@@ -154,6 +155,7 @@ namespace Minecraft
                 World.LightBlock(x, y, z, source);
                 World.MarkBlockMeshDirty(x, y, z, source);
                 FungalCarpetSystem.NotifyBlockChanged(new Vector3Int(x, y, z));
+                BuildingRuntimeService.NotifyBlockChanged(new Vector3Int(x, y, z));
                 return true;
             }
 

@@ -10,6 +10,22 @@ namespace Minecraft.UI.Framework
         [SerializeField] private GameObject m_BattleInfoRoot;
         [SerializeField] private GameObject m_BossWarningAnchor;
 
+        protected override void OnCreate()
+        {
+            base.OnCreate();
+            if (!m_BattleInfoRoot)
+            {
+                Transform battleInfo = Transform.Find("BattleInfoRoot");
+                if (battleInfo) m_BattleInfoRoot = battleInfo.gameObject;
+            }
+
+            if (!m_BossWarningAnchor)
+            {
+                Transform bossWarning = Transform.Find("BossWarningAnchor");
+                if (bossWarning) m_BossWarningAnchor = bossWarning.gameObject;
+            }
+        }
+
         public void SetCombatVisible(bool visible)
         {
             if (m_BattleInfoRoot)

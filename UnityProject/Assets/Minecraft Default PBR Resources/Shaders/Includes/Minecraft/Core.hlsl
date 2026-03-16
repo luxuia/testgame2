@@ -97,7 +97,7 @@ inline void ApplyFungalOverlay(float3 blockPos, float3 normalWS, float2 uv, inou
     half4 overlayTex = SAMPLE_TEXTURE2D(_FungalOverlayTex, sampler_FungalOverlayTex, uv);
     half overlayPattern = dot(overlayTex.rgb, half3(0.299h, 0.587h, 0.114h));
     half overlayMask = max(overlayTex.a, overlayPattern);
-    half mask = saturate(overlayMask * stateColor.a * _FungalOverlayStrength);
+    half mask = saturate(overlayMask * stateColor.a * _FungalOverlayStrength * 0.86h);
     if (mask <= 0.001)
     {
         return;
@@ -106,7 +106,7 @@ inline void ApplyFungalOverlay(float3 blockPos, float3 normalWS, float2 uv, inou
     half3 fungalResult = color.rgb;
 
     float spatialSeed = dot(floor(blockPos.xz), float2(0.73, 1.11));
-    half pulse = 0.5h + 0.5h * sin(_Time.y * 6.0 + spatialSeed * 6.0 + overlayPattern * 4.0);
+    half pulse = 0.5h + 0.5h * sin(_Time.y * 5.2 + spatialSeed * 5.4 + overlayPattern * 3.4);
 
     float2 crackUv = uv * 18.0 + blockPos.xz * 2.7;
     half crackWave = abs(sin(crackUv.x * 3.1 + crackUv.y * 2.3));
@@ -115,10 +115,10 @@ inline void ApplyFungalOverlay(float3 blockPos, float3 normalWS, float2 uv, inou
 
     if (encodedState < 0.5h) // Infecting
     {
-        half infectMask = mask * (0.45h + 0.55h * pulse);
-        half3 infectColor = lerp(stateColor.rgb * 0.35h, stateColor.rgb * 1.15h, pulse);
+        half infectMask = mask * (0.34h + 0.44h * pulse);
+        half3 infectColor = lerp(stateColor.rgb * 0.48h, stateColor.rgb * 0.96h, pulse);
         fungalResult = lerp(fungalResult, infectColor, infectMask);
-        fungalResult += stateColor.rgb * (0.06h * pulse * infectMask);
+        fungalResult += stateColor.rgb * (0.015h * pulse * infectMask);
     }
     else if (encodedState < 0.85h) // Damaged
     {
@@ -129,9 +129,9 @@ inline void ApplyFungalOverlay(float3 blockPos, float3 normalWS, float2 uv, inou
     }
     else // Completed
     {
-        half completeMask = mask * 0.9h;
+        half completeMask = mask * 0.82h;
         half3 completedBase = lerp(fungalResult, stateColor.rgb, completeMask);
-        half3 completedGlow = stateColor.rgb * (0.14h + overlayPattern * 0.12h) * completeMask;
+        half3 completedGlow = stateColor.rgb * (0.035h + overlayPattern * 0.05h) * completeMask;
         fungalResult = completedBase + completedGlow;
     }
 
@@ -149,15 +149,15 @@ inline void ApplyFungalOverlay(float3 blockPos, float3 normalWS, float2 uv, inou
         half strengthUp = GetFungalStateStrength(SAMPLE_TEXTURE2D(_FungalStateMap, sampler_FungalStateMap, saturate(stateUv + offsetY)).r);
 
         half edgeDelta = max(max(stateStrength - strengthLeft, stateStrength - strengthRight), max(stateStrength - strengthDown, stateStrength - strengthUp));
-        half edgeFactor = saturate(edgeDelta * 2.4h);
+        half edgeFactor = saturate(edgeDelta * 1.65h);
 
         half crawlPhase = _Time.y * 7.4h + dot(blockPos.xz, half2(1.7h, -1.3h)) * 1.3h + overlayPattern * 10.0h;
         half crawlBand = smoothstep(0.35h, 1.0h, 0.5h + 0.5h * sin(crawlPhase));
-        half edgeMask = edgeFactor * mask * (0.35h + 0.65h * crawlBand);
+        half edgeMask = edgeFactor * mask * (0.22h + 0.42h * crawlBand);
 
-        half3 edgeTint = lerp(stateColor.rgb * 0.75h, stateColor.rgb * 1.55h, crawlBand);
+        half3 edgeTint = lerp(stateColor.rgb * 0.72h, stateColor.rgb * 1.10h, crawlBand);
         fungalResult = lerp(fungalResult, edgeTint, edgeMask);
-        fungalResult += edgeTint * (0.08h * edgeMask);
+        fungalResult += edgeTint * (0.02h * edgeMask);
     }
 
     color.rgb = fungalResult;

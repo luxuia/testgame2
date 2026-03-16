@@ -61,6 +61,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Scripts\Entities\PlayerEntity.cs" />
+    <Compile Include="Assets\Scripts\Building\BuildingTypeId.cs" />
     <Compile Include="Assets\Scripts\Assets\AssetInfo.cs" />
     <Compile Include="Assets\XLua\Src\DelegateBridge.cs" />
     <Compile Include="Assets\Scripts\UI\Framework\UIRootView.cs" />
@@ -84,9 +85,11 @@
     <Compile Include="Assets\Scripts\Chunk3x3Accessor.cs" />
     <Compile Include="Assets\XLua\Src\LuaAsset.cs" />
     <Compile Include="Assets\Scripts\ChunkBuilder.cs" />
+    <Compile Include="Assets\Scripts\Building\BuildingDefinition.cs" />
     <Compile Include="Assets\Scripts\Assets\UnityResourceAPI.cs" />
     <Compile Include="Assets\Scripts\PlayerControls\FluidInteractor.cs" />
     <Compile Include="Assets\Scripts\Rendering\ShaderUtility.cs" />
+    <Compile Include="Assets\Scripts\UI\Framework\UIManagerBindingBridge.cs" />
     <Compile Include="Assets\Scripts\PlayerControls\FirstPersonLook.cs" />
     <Compile Include="Assets\XLua\Src\ObjectCasters.cs" />
     <Compile Include="Assets\Scripts\Configurations\BlockFace.cs" />
@@ -115,6 +118,7 @@
     <Compile Include="Assets\Scripts\Assets\EnsureAssetTypeAttribute.cs" />
     <Compile Include="Assets\Scripts\PlayerControls\PathfindingMovementController.cs" />
     <Compile Include="Assets\Scripts\Configurations\IOrderedConfigData.cs" />
+    <Compile Include="Assets\Scripts\Building\BuildingInstanceRuntime.cs" />
     <Compile Include="Assets\Scripts\Utils\ArrayUtility.cs" />
     <Compile Include="Assets\Scripts\UI\Framework\SidePanelView.cs" />
     <Compile Include="Assets\Scripts\Collections\LRULinkedMap.cs" />
@@ -127,12 +131,15 @@
     <Compile Include="Assets\Scripts\PhysicSystem\PhysicMaterial.cs" />
     <Compile Include="Assets\XLua\Src\SignatureLoader.cs" />
     <Compile Include="Assets\Fighter Pack Bundle\Male Fighter Mecanim Animation Pack\Code\FighterAnimationDemo.cs" />
+    <Compile Include="Assets\Scripts\CombatFeedbackView.cs" />
     <Compile Include="Assets\Scripts\Collections\HashUtility.cs" />
     <Compile Include="Assets\Scripts\WorldUtility.cs" />
     <Compile Include="Assets\Scripts\Lua\ILuaCallCSharp.cs" />
     <Compile Include="Assets\XLua\Src\TypeExtensions.cs" />
     <Compile Include="Assets\Scripts\CombatFramework.cs" />
+    <Compile Include="Assets\Scripts\Building\BuildingRuntimeService.cs" />
     <Compile Include="Assets\Scripts\PlayerControls\CurveControlledBob.cs" />
+    <Compile Include="Assets\Scripts\Building\BuildingFunctionalSnapshot.cs" />
     <Compile Include="Assets\Scripts\IWorldRWAccessor.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\GenerationHelper.cs" />
     <Compile Include="Assets\Scripts\UI\Framework\CombatOverlayView.cs" />
@@ -144,6 +151,7 @@
     <Compile Include="Assets\Scripts\Configurations\BlockFlags.cs" />
     <Compile Include="Assets\Scripts\Assets\AssetBundleInfo.cs" />
     <Compile Include="Assets\XLua\Src\MethodWarpsCache.cs" />
+    <Compile Include="Assets\Scripts\Building\BuildingFunctionFlags.cs" />
     <Compile Include="Assets\XLua\Src\ObjectPool.cs" />
     <Compile Include="Assets\Scripts\CombatAIFramework.cs" />
     <Compile Include="Assets\Scripts\Configurations\BlockUtility.cs" />
@@ -155,6 +163,7 @@
     <Compile Include="Assets\Scripts\MathUtility.cs" />
     <Compile Include="Assets\Scripts\PlayerControls\TargetSelector.cs" />
     <Compile Include="Assets\Scripts\WorldSinglePlayer.cs" />
+    <Compile Include="Assets\Scripts\GoalPlanning\GoapTaskCatalog.cs" />
     <Compile Include="Assets\XLua\Src\GenericDelegateBridge.cs" />
     <Compile Include="Assets\Scripts\Configurations\BlockMesh.cs" />
     <Compile Include="Assets\Scripts\Utils\WorkScheduler.cs" />
@@ -164,6 +173,7 @@
     <Compile Include="Assets\Scripts\Collections\NibbleArray.cs" />
     <Compile Include="Assets\Scripts\UI\Framework\UIPrefabKeys.cs" />
     <Compile Include="Assets\Scripts\InspectorExtensions\MinMaxSliderAttribute.cs" />
+    <Compile Include="Assets\Scripts\Building\BuildingRuntimeState.cs" />
     <Compile Include="Assets\Scripts\Lua\IHotfixable.cs" />
     <Compile Include="Assets\XLua\Src\Utils.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\GenLayers\DefaultLayers\IslandLayer.cs" />
@@ -203,6 +213,7 @@
     <Compile Include="Assets\Scripts\WorldSetting.cs" />
     <Compile Include="Assets\Scripts\UI\Framework\UIPrefabViewLoader.cs" />
     <Compile Include="Assets\Scripts\Rendering\SectionRenderingManager.cs" />
+    <Compile Include="Assets\Scripts\Building\BuildingDefaults.cs" />
     <Compile Include="Assets\Scripts\ChunkManager.cs" />
     <Compile Include="Assets\Scripts\Configurations\BiomeData.cs" />
     <Compile Include="Assets\Scripts\ScriptableWorldGeneration\GenerationContext.cs" />

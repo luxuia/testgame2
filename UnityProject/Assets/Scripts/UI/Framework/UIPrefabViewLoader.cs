@@ -8,31 +8,22 @@ namespace Minecraft.UI.Framework
     [DisallowMultipleComponent]
     public sealed class UIPrefabViewLoader : ViewLoader
     {
-        [Serializable]
-        private struct Entry
-        {
-            public string key;
-            public AbstractView prefab;
-        }
-
-        [SerializeField] private Entry[] m_Entries = Array.Empty<Entry>();
-        [SerializeField] private string m_ResourcesPrefix = "UI/";
+        [Header("Core Prefabs")]
+        [SerializeField] private GameObject m_HUDRootPrefab;
+        [SerializeField] private GameObject m_SidePanelPrefab;
+        [SerializeField] private GameObject m_ModalTemplatePrefab;
+        [SerializeField] private GameObject m_CombatOverlayPrefab;
 
         private Dictionary<string, AbstractView> m_Cache;
 
         private void Awake()
         {
             m_Cache = new Dictionary<string, AbstractView>(StringComparer.Ordinal);
-            for (int i = 0; i < m_Entries.Length; i++)
-            {
-                Entry entry = m_Entries[i];
-                if (string.IsNullOrWhiteSpace(entry.key) || !entry.prefab)
-                {
-                    continue;
-                }
 
-                m_Cache[entry.key] = entry.prefab;
-            }
+            RegisterCore(UIPrefabKeys.HUDRoot, m_HUDRootPrefab);
+            RegisterCore(UIPrefabKeys.SidePanel, m_SidePanelPrefab);
+            RegisterCore(UIPrefabKeys.ModalTemplate, m_ModalTemplatePrefab);
+            RegisterCore(UIPrefabKeys.CombatOverlay, m_CombatOverlayPrefab);
         }
 
         public override void LoadViewPrefab(object key, Action<AbstractView> callback)
@@ -48,16 +39,6 @@ namespace Minecraft.UI.Framework
                 return;
             }
 
-            if (key is string resourceKey)
-            {
-                AbstractView loaded = Resources.Load<AbstractView>(m_ResourcesPrefix + resourceKey);
-                if (loaded)
-                {
-                    callback(loaded);
-                    return;
-                }
-            }
-
             Debug.LogWarning($"UIPrefabViewLoader cannot find view prefab for key: {key}");
             callback(null);
         }
@@ -65,6 +46,22 @@ namespace Minecraft.UI.Framework
         public override void ReleaseViewPrefab(object key, AbstractView prefab)
         {
             // Prefabs are scene/runtime references managed by Unity object lifecycle.
+        }
+
+        private void RegisterCore(string key, GameObject prefabObject)
+        {
+            if (string.IsNullOrEmpty(key) || !prefabObject)
+            {
+                return;
+            }
+
+            if (!prefabObject.TryGetComponent(out AbstractView view))
+            {
+                Debug.LogWarning($"Core prefab {prefabObject.name} is missing AbstractView component.");
+                return;
+            }
+
+            m_Cache[key] = view;
         }
     }
 }

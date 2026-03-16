@@ -35,6 +35,10 @@ namespace Minecraft.Entities
         [SerializeField] [Min(0f)] private float m_CombatInitialHealth = 100f;
         [SerializeField] [Min(0f)] private float m_CombatAttackPower = 10f;
         [SerializeField] [Min(0f)] private float m_CombatDefense = 2f;
+        [SerializeField] [Min(0f)] private float m_DespawnDelayOnDeath = 1.5f;
+        [SerializeField] private bool m_DestroyOnDespawn = true;
+        [SerializeField] private bool m_SnapToGroundOnInitialize = true;
+        [SerializeField] [Min(0f)] private float m_GroundSnapOffset = 0.05f;
 
         [Space]
 
@@ -43,6 +47,7 @@ namespace Minecraft.Entities
         [SerializeField] private CurveControlledBob m_HeadBob;
         [SerializeField] private LerpControlledBob m_JumpBob;
         [SerializeField] private FighterAnimatorDriver m_FighterAnimator;
+        [SerializeField] private CombatFeedbackView m_CombatFeedback;
 
         [Space]
         [Header("Events")]
@@ -61,6 +66,8 @@ namespace Minecraft.Entities
         private Transform m_CameraTransform;
         private FluidInteractor m_FluidInteractor;
         private PlayerController m_PlayerController;
+        private BlockInteraction m_BlockInteraction;
+        private PathfindingMovementController m_PathfindingMovementController;
 
         private Vector3 m_OriginalCameraPosition;
         private bool m_Jump;
@@ -76,6 +83,9 @@ namespace Minecraft.Entities
         private Vector3Int m_LastFungalFootprint;
         private float m_NextFungalFootprintTime;
         [NonSerialized] private CombatEntityRuntime m_CombatRuntime;
+        [NonSerialized] private float m_DeathEnteredTime = -1f;
+        [NonSerialized] private bool m_DeathControlLocked;
+        [NonSerialized] private bool m_GroundSnapResolved;
 
         public CombatEntityRuntime CombatRuntime => m_CombatRuntime;
 
@@ -83,6 +93,7 @@ namespace Minecraft.Entities
         protected override void Start()
         {
             base.Start();
+            TrySnapToGroundOnInitialize();
 
             m_InputActions.Enable();
             m_MoveAction = m_InputActions["Player/Move"];
@@ -97,6 +108,8 @@ namespace Minecraft.Entities
             m_CameraTransform = m_Camera.GetComponent<Transform>();
             m_FluidInteractor = GetComponent<FluidInteractor>();
             m_PlayerController = GetComponent<PlayerController>();
+            m_BlockInteraction = GetComponent<BlockInteraction>();
+            m_PathfindingMovementController = GetComponent<PathfindingMovementController>();
 
             m_FirstPersonLook.Initialize(m_Transform, m_CameraTransform, true);
             m_HeadBob.Initialize(m_CameraTransform);
@@ -117,15 +130,16 @@ namespace Minecraft.Entities
             m_FlyDownAction.performed += SwitchFlyDownMode;
             m_CursorStateAction.performed += SwitchCursorState;
 
-            BlockInteraction interaction = GetComponent<BlockInteraction>();
-            interaction.Initialize(m_Camera, this);
-            interaction.enabled = true;
+            m_BlockInteraction.Initialize(m_Camera, this);
+            m_BlockInteraction.enabled = true;
 
             m_PlayerController.Initialize(m_Camera, this);
             m_PlayerController.enabled = true;
 
             InitializeCombatRuntimeIfNeeded();
             ResolveFighterAnimatorIfNeeded();
+            ResolveCombatFeedbackIfNeeded();
+            RefreshCombatFeedbackHealth();
             m_WasGroundedForAnimation = true;
         }
 
@@ -157,7 +171,15 @@ namespace Minecraft.Entities
 
         private void Update()
         {
+            TrySnapToGroundOnInitialize();
             SyncCombatRuntimePosition();
+            TickCombatLifecycle();
+            RefreshCombatFeedbackHealth();
+
+            if (!CanAcceptControlInput())
+            {
+                return;
+            }
 
             // 在 Update 里读取输入。
             // 如果在 FixedUpdate 里读输入会出现丢失，
@@ -180,8 +202,54 @@ namespace Minecraft.Entities
             m_PreviouslyGrounded = isGrounded;
         }
 
+        private void TrySnapToGroundOnInitialize()
+        {
+            if (m_GroundSnapResolved)
+            {
+                return;
+            }
+
+            if (!m_SnapToGroundOnInitialize)
+            {
+                m_GroundSnapResolved = true;
+                return;
+            }
+
+            IWorld world = World;
+            if (world == null || !world.Initialized || world.RWAccessor == null)
+            {
+                return;
+            }
+
+            Vector3 current = m_Transform.position;
+            int x = Mathf.FloorToInt(current.x);
+            int z = Mathf.FloorToInt(current.z);
+            int topY = world.RWAccessor.GetTopVisibleBlockY(x, z, int.MinValue);
+            if (topY == int.MinValue)
+            {
+                return;
+            }
+
+            float feetOffset = Mathf.Max(0f, -BoundingBox.Min.y);
+            float desiredY = topY + feetOffset + Mathf.Max(0f, m_GroundSnapOffset);
+            if (desiredY < current.y - 0.0001f)
+            {
+                current.y = desiredY;
+                m_Transform.position = current;
+            }
+
+            SyncCombatRuntimePosition();
+            m_GroundSnapResolved = true;
+        }
+
         protected override void FixedUpdate()
         {
+            TickCombatLifecycle();
+            if (!CanAcceptControlInput())
+            {
+                return;
+            }
+
             float speed = GetInput(out Vector2 input);
             m_FluidInteractor.UpdateState(this, m_CameraTransform, out float vMultiplier);
             bool groundedForAnimation = true;
@@ -388,40 +456,20 @@ namespace Minecraft.Entities
         public float ApplyCombatDamage(float amount)
         {
             InitializeCombatRuntimeIfNeeded();
-            float before = m_CombatRuntime.CurrentHealth;
-            float applied = m_CombatRuntime.ApplyDamage(amount);
-            if (applied > 0f && m_FighterAnimator != null)
-            {
-                if (before > 0f && m_CombatRuntime.CurrentHealth <= 0f)
-                {
-                    m_FighterAnimator.PlayAction(FighterAnimationAction.Death);
-                }
-                else
-                {
-                    m_FighterAnimator.PlayAction(FighterAnimationAction.LightHit);
-                }
-            }
-
-            return applied;
+            return m_CombatRuntime.TryApplyHit(amount, out float applied, out _) ? applied : 0f;
         }
 
         public float HealCombat(float amount)
         {
             InitializeCombatRuntimeIfNeeded();
-            float before = m_CombatRuntime.CurrentHealth;
-            float healed = m_CombatRuntime.Heal(amount);
-            if (healed > 0f && before <= 0f && m_CombatRuntime.CurrentHealth > 0f)
-            {
-                m_FighterAnimator?.PlayAction(FighterAnimationAction.Revive);
-            }
-
-            return healed;
+            return m_CombatRuntime.Heal(amount);
         }
 
         private void InitializeCombatRuntimeIfNeeded()
         {
             if (m_CombatRuntime != null)
             {
+                BindCombatRuntimeEvents();
                 return;
             }
 
@@ -438,7 +486,17 @@ namespace Minecraft.Entities
                 AttackPower = Mathf.Max(0f, m_CombatAttackPower),
                 Defense = Mathf.Max(0f, m_CombatDefense),
                 Position = Position,
+                LifecycleState = initialHealth > 0f ? CombatLifecycleState.Alive : CombatLifecycleState.Dead,
             };
+
+            BindCombatRuntimeEvents();
+            if (initialHealth <= 0f)
+            {
+                m_CombatRuntime.EnterDeathLifecycle();
+            }
+
+            ResolveCombatFeedbackIfNeeded();
+            RefreshCombatFeedbackHealth();
         }
 
         private void SyncCombatRuntimePosition()
@@ -449,6 +507,147 @@ namespace Minecraft.Entities
             }
 
             m_CombatRuntime.Position = Position;
+        }
+
+        private bool CanAcceptControlInput()
+        {
+            return m_CombatRuntime == null || m_CombatRuntime.CanAct;
+        }
+
+        private void TickCombatLifecycle()
+        {
+            if (m_CombatRuntime == null || m_CombatRuntime.LifecycleState != CombatLifecycleState.Dead || m_DeathEnteredTime < 0f)
+            {
+                return;
+            }
+
+            if (Time.time >= m_DeathEnteredTime + Mathf.Max(0f, m_DespawnDelayOnDeath))
+            {
+                m_CombatRuntime.TryMarkDespawned();
+            }
+        }
+
+        private void BindCombatRuntimeEvents()
+        {
+            if (m_CombatRuntime == null)
+            {
+                return;
+            }
+
+            m_CombatRuntime.OnHit -= HandleRuntimeHit;
+            m_CombatRuntime.OnDamageApplied -= HandleRuntimeDamageApplied;
+            m_CombatRuntime.OnDeath -= HandleRuntimeDeath;
+            m_CombatRuntime.OnDespawn -= HandleRuntimeDespawn;
+
+            m_CombatRuntime.OnHit += HandleRuntimeHit;
+            m_CombatRuntime.OnDamageApplied += HandleRuntimeDamageApplied;
+            m_CombatRuntime.OnDeath += HandleRuntimeDeath;
+            m_CombatRuntime.OnDespawn += HandleRuntimeDespawn;
+        }
+
+        private void UnbindCombatRuntimeEvents()
+        {
+            if (m_CombatRuntime == null)
+            {
+                return;
+            }
+
+            m_CombatRuntime.OnHit -= HandleRuntimeHit;
+            m_CombatRuntime.OnDamageApplied -= HandleRuntimeDamageApplied;
+            m_CombatRuntime.OnDeath -= HandleRuntimeDeath;
+            m_CombatRuntime.OnDespawn -= HandleRuntimeDespawn;
+        }
+
+        private void HandleRuntimeHit(CombatEntityRuntime runtime, float incomingDamage)
+        {
+            _ = runtime;
+            _ = incomingDamage;
+        }
+
+        private void HandleRuntimeDamageApplied(CombatEntityRuntime runtime, float damage)
+        {
+            if (runtime != m_CombatRuntime)
+            {
+                return;
+            }
+
+            ResolveFighterAnimatorIfNeeded();
+            if (damage > 0f &&
+                runtime.LifecycleState == CombatLifecycleState.Alive &&
+                runtime.CurrentHealth > 0f &&
+                m_FighterAnimator != null)
+            {
+                m_FighterAnimator.PlayAction(FighterAnimationAction.LightHit);
+                ResolveCombatFeedbackIfNeeded();
+                m_CombatFeedback?.ShowDamage(damage);
+            }
+
+            RefreshCombatFeedbackHealth();
+        }
+
+        private void HandleRuntimeDeath(CombatEntityRuntime runtime)
+        {
+            if (runtime != m_CombatRuntime)
+            {
+                return;
+            }
+
+            m_DeathEnteredTime = Time.time;
+            LockControlsOnDeath();
+            m_FighterAnimator?.PlayAction(FighterAnimationAction.Death);
+            RefreshCombatFeedbackHealth();
+        }
+
+        private void HandleRuntimeDespawn(CombatEntityRuntime runtime)
+        {
+            if (runtime != m_CombatRuntime)
+            {
+                return;
+            }
+
+            if (m_DestroyOnDespawn)
+            {
+                Destroy(gameObject);
+            }
+            else
+            {
+                gameObject.SetActive(false);
+            }
+        }
+
+        private void LockControlsOnDeath()
+        {
+            if (m_DeathControlLocked)
+            {
+                return;
+            }
+
+            m_DeathControlLocked = true;
+            m_Jump = false;
+            m_FlyDown = false;
+            m_IsRunning = false;
+
+            if (m_PlayerController != null)
+            {
+                m_PlayerController.CancelCurrentAction();
+                m_PlayerController.enabled = false;
+            }
+
+            if (m_PathfindingMovementController != null)
+            {
+                m_PathfindingMovementController.ClearTarget();
+                m_PathfindingMovementController.enabled = false;
+            }
+
+            if (m_BlockInteraction != null)
+            {
+                m_BlockInteraction.enabled = false;
+            }
+
+            if (m_InputActions != null)
+            {
+                m_InputActions.Disable();
+            }
         }
 
         private void ResolveFighterAnimatorIfNeeded()
@@ -479,6 +678,32 @@ namespace Minecraft.Entities
             m_FighterAnimator?.TryInitialize();
         }
 
+        private void ResolveCombatFeedbackIfNeeded()
+        {
+            if (m_CombatFeedback == null)
+            {
+                m_CombatFeedback = GetComponent<CombatFeedbackView>();
+            }
+
+            if (m_CombatFeedback == null)
+            {
+                m_CombatFeedback = gameObject.AddComponent<CombatFeedbackView>();
+            }
+
+            m_CombatFeedback?.EnsureInitialized();
+        }
+
+        private void RefreshCombatFeedbackHealth()
+        {
+            if (m_CombatRuntime == null)
+            {
+                return;
+            }
+
+            ResolveCombatFeedbackIfNeeded();
+            m_CombatFeedback?.SetHealth(m_CombatRuntime.CurrentHealth, m_CombatRuntime.MaxHealth);
+        }
+
         private void UpdateFighterAnimator(Vector3 worldVelocity, bool isGrounded)
         {
             if (m_FighterAnimator == null)
@@ -497,6 +722,32 @@ namespace Minecraft.Entities
             }
 
             m_WasGroundedForAnimation = isGrounded;
+        }
+
+        private void OnDestroy()
+        {
+            if (m_JumpAction != null)
+            {
+                m_JumpAction.performed -= SwitchJumpMode;
+                m_JumpAction.canceled -= SwitchJumpMode;
+            }
+
+            if (m_FlyAction != null)
+            {
+                m_FlyAction.performed -= SwitchFlyMode;
+            }
+
+            if (m_FlyDownAction != null)
+            {
+                m_FlyDownAction.performed -= SwitchFlyDownMode;
+            }
+
+            if (m_CursorStateAction != null)
+            {
+                m_CursorStateAction.performed -= SwitchCursorState;
+            }
+
+            UnbindCombatRuntimeEvents();
         }
     }
 }

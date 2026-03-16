@@ -124,6 +124,13 @@ namespace Minecraft.PlayerControls
 
         private void UpdateAttack()
         {
+            if (!CanIssueCombatActions())
+            {
+                ShaderUtility.DigProgress = 0;
+                ShaderUtility.TargetedBlockPosition = Vector3.down;
+                return;
+            }
+
             if (m_TargetSelector.SelectionCount <= 0 ||
                 !m_TargetSelector.SelectedTargetBlock.HasValue ||
                 !m_TargetSelector.IsMineSelection)
@@ -207,6 +214,16 @@ namespace Minecraft.PlayerControls
             return Mathf.Max(1f, AttackDamage);
         }
 
+        private bool CanIssueCombatActions()
+        {
+            if (m_PlayerEntity is not PlayerEntity player || player.CombatRuntime == null)
+            {
+                return true;
+            }
+
+            return player.CombatRuntime.CanAct;
+        }
+
         private void TryPlayDigAttackAnimation()
         {
             if (m_FighterAnimator == null)
@@ -267,7 +284,11 @@ namespace Minecraft.PlayerControls
 
             if (actor == null)
             {
-                m_FighterAnimator.PlayActionByName(fallbackActionName);
+                return;
+            }
+
+            if (!actor.CanAct)
+            {
                 return;
             }
 
@@ -283,6 +304,11 @@ namespace Minecraft.PlayerControls
             };
 
             CombatActionResult result = m_CombatPipeline.Execute(in request);
+            if (!result.Success)
+            {
+                return;
+            }
+
             string actionName = !string.IsNullOrWhiteSpace(result.AnimationActionName)
                 ? result.AnimationActionName
                 : fallbackActionName;
